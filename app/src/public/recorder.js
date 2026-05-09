@@ -91,7 +91,7 @@ const ports = {
   },
   requestDisplay: () => capture.requestDisplay(),
   requestUser: () => capture.requestUser(),
-  startCapture(stream, audioStream, onTrackEnded) {
+  startCapture(stream, audioStream, _videoEnabled, onTrackEnded) {
     capture.start(stream, audioStream, onTrackEnded);
   },
   stopCapture: () => capture.stop(),
