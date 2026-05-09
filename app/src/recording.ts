@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { DuplicateSlugError, type DB, type Recording } from './db';
 import type { R2 } from './r2';
+import type { CreateUploadResponse } from './contracts';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 export const SLUG_LENGTH = 6;
@@ -16,11 +17,7 @@ export interface CreateRecordingArgs {
   sizeBytes: number;
 }
 
-export interface CreatedRecording {
-  slug: string;
-  uploadUrl: string;
-  viewerUrl: string;
-}
+export type CreatedRecording = CreateUploadResponse;
 
 export interface RecordingView {
   slug: string;

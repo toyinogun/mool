@@ -1,3 +1,8 @@
+/**
+ * @typedef {import('../contracts').CreateUploadResponse} CreateUploadResponse
+ * @typedef {import('../contracts').CreateUploadErrorResponse} CreateUploadErrorResponse
+ */
+
 const startBtn = document.getElementById('start');
 const stopBtn = document.getElementById('stop');
 const statusEl = document.getElementById('status');
@@ -141,12 +146,16 @@ async function onRecordingStopped() {
   }
 
   if (!createRes.ok) {
-    setStatus(`Upload rejected: ${createBody.error ?? createRes.status}`);
+    /** @type {CreateUploadErrorResponse} */
+    const errBody = createBody;
+    setStatus(`Upload rejected: ${errBody.error ?? createRes.status}`);
     resetUiAfterFailure();
     return;
   }
 
-  const { uploadUrl, viewerUrl } = createBody;
+  /** @type {CreateUploadResponse} */
+  const ok = createBody;
+  const { uploadUrl, viewerUrl } = ok;
 
   let putRes;
   try {

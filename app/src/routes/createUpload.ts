@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import type { Recordings } from '../recording';
+import type { CreateUploadResponse, CreateUploadErrorResponse } from '../contracts';
 
 const ALLOWED_MIME = new Set(['video/webm', 'video/webm;codecs=vp9']);
 
@@ -18,7 +19,8 @@ export function createUploadRoute(deps: CreateUploadDeps) {
     const body = req.body ?? {};
     const ct = normalizeMime(body.contentType);
     if (!ALLOWED_MIME.has(ct)) {
-      res.status(400).json({ error: 'invalid_content_type' });
+      const body: CreateUploadErrorResponse = { error: 'invalid_content_type' };
+      res.status(400).json(body);
       return;
     }
 
@@ -28,17 +30,23 @@ export function createUploadRoute(deps: CreateUploadDeps) {
       !Number.isInteger(sizeBytes) ||
       sizeBytes <= 0
     ) {
-      res.status(400).json({ error: 'invalid_size_bytes' });
+      const body: CreateUploadErrorResponse = { error: 'invalid_size_bytes' };
+      res.status(400).json(body);
       return;
     }
     if (sizeBytes > deps.maxUploadBytes) {
-      res
-        .status(413)
-        .json({ error: 'file_too_large', maxBytes: deps.maxUploadBytes });
+      const body: CreateUploadErrorResponse = {
+        error: 'file_too_large',
+        maxBytes: deps.maxUploadBytes,
+      };
+      res.status(413).json(body);
       return;
     }
 
-    const created = await deps.recordings.create({ contentType: 'video/webm', sizeBytes });
+    const created: CreateUploadResponse = await deps.recordings.create({
+      contentType: 'video/webm',
+      sizeBytes,
+    });
     res.json(created);
   };
 }
