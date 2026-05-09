@@ -57,7 +57,7 @@ describe('GET /v/:slug', () => {
     const app = createApp({
       recordings: failingRecordings,
       maxUploadBytes: 1024,
-      viewerTemplate: '<!doctype html><html><body><video src="{{VIDEO_URL}}"></video></body></html>',
+      viewerTemplate: '<!doctype html><html><body><video src="{{PLAYBACK_URL}}"></video></body></html>',
       publicDir: null,
     });
     const res = await request(app).get('/v/abc123');

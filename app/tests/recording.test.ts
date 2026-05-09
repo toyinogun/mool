@@ -6,14 +6,12 @@ import {
   SlugGenerationExhaustedError,
   UnsupportedContentTypeError,
 } from '../src/recording';
-import type { R2 } from '../src/r2';
-
-function fakeR2(): R2 {
+function fakeR2() {
   return {
-    async mintUploadUrl({ key }) {
+    async mintUploadUrl({ key }: { key: string; contentType: string; sizeBytes: number }) {
       return `https://fake-r2.test/${key}?signed=1`;
     },
-    publicUrl(key) {
+    publicUrl(key: string) {
       return `https://videos.example.com/${key}`;
     },
   };
@@ -26,7 +24,7 @@ describe('createRecordings.create', () => {
   it('returns slug, uploadUrl, and viewerUrl', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
@@ -41,10 +39,10 @@ describe('createRecordings.create', () => {
     recordings.close();
   });
 
-  it("persists the recording so its videoUrl resolves to '<slug>.webm' on the public R2 base", async () => {
+  it("persists the recording so its playbackUrl resolves to '<slug>.webm' on the public R2 base", async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
@@ -56,24 +54,19 @@ describe('createRecordings.create', () => {
     const view = await recordings.get(slug);
     expect(view).not.toBeNull();
     expect(view!.slug).toBe(slug);
-    expect(view!.videoUrl).toBe(`https://videos.example.com/${slug}.webm`);
+    expect(view!.playbackUrl).toBe(`https://videos.example.com/${slug}.webm`);
     recordings.close();
   });
 
   it('forwards the caller-provided contentType to R2', async () => {
     const seenContentTypes: string[] = [];
-    const capturingR2: R2 = {
-      async mintUploadUrl({ key, contentType }) {
+    const recordings = createRecordings({
+      dbPath: ':memory:',
+      ...fakeR2(),
+      mintUploadUrl: async ({ key, contentType }) => {
         seenContentTypes.push(contentType);
         return `https://fake-r2.test/${key}?signed=1`;
       },
-      publicUrl(key) {
-        return `https://videos.example.com/${key}`;
-      },
-    };
-    const recordings = createRecordings({
-      dbPath: ':memory:',
-      r2: capturingR2,
       viewerUrl: viewerUrlFor,
     });
 
@@ -91,7 +84,7 @@ describe('createRecordings.create content-type validation', () => {
   it('rejects a contentType outside ALLOWED_MIME with UnsupportedContentTypeError', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
@@ -114,7 +107,7 @@ describe('createRecordings.create content-type validation', () => {
   it('accepts video/webm;codecs=vp9 (canonical AllowedMime literal)', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
     const result = await recordings.create({
@@ -128,7 +121,7 @@ describe('createRecordings.create content-type validation', () => {
   it('normalizes case and whitespace before validating', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
     // Mixed case + a space inside the parameter — should normalize to
@@ -146,7 +139,7 @@ describe('createRecordings.get', () => {
   it('returns a Promise (locks in pre-v0.4 async shape for presigned-GET migration)', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
@@ -159,7 +152,7 @@ describe('createRecordings.get', () => {
   it('returns the recording with its viewer-side URLs for a known slug', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
       generateSlug: () => 'abc123',
     });
@@ -169,14 +162,14 @@ describe('createRecordings.get', () => {
 
     expect(got).not.toBeNull();
     expect(got!.slug).toBe('abc123');
-    expect(got!.videoUrl).toBe('https://videos.example.com/abc123.webm');
+    expect(got!.playbackUrl).toBe('https://videos.example.com/abc123.webm');
     recordings.close();
   });
 
   it('returns null for an unknown slug', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
@@ -187,7 +180,7 @@ describe('createRecordings.get', () => {
   it('returns null for a malformed slug without touching db', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
@@ -220,7 +213,7 @@ describe('slug generation (via create)', () => {
   it('produces highly unique slugs over many invocations', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
@@ -250,7 +243,7 @@ describe('createRecordings.create slug collision retry', () => {
     let i = 0;
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
       generateSlug: () => slugs[i++],
     });
@@ -279,7 +272,7 @@ describe('createRecordings.create slug collision retry', () => {
     let calls = 0;
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: fakeR2(),
+      ...fakeR2(),
       viewerUrl: viewerUrlFor,
       generateSlug: () => {
         calls++;
@@ -310,17 +303,12 @@ describe('createRecordings.create slug collision retry', () => {
 
 describe('createRecordings.create orphan-row policy on R2 failure', () => {
   it('propagates the R2 error and leaves the row inserted (orphaned by design)', async () => {
-    const failingR2: R2 = {
-      async mintUploadUrl() {
-        throw new Error('R2 unavailable');
-      },
-      publicUrl(key) {
-        return `https://videos.example.com/${key}`;
-      },
-    };
     const recordings = createRecordings({
       dbPath: ':memory:',
-      r2: failingR2,
+      ...fakeR2(),
+      mintUploadUrl: async () => {
+        throw new Error('R2 unavailable');
+      },
       viewerUrl: viewerUrlFor,
       generateSlug: () => 'orph01',
     });
@@ -336,7 +324,7 @@ describe('createRecordings.create orphan-row policy on R2 failure', () => {
     const view = await recordings.get('orph01');
     expect(view).not.toBeNull();
     expect(view!.slug).toBe('orph01');
-    expect(view!.videoUrl).toBe('https://videos.example.com/orph01.webm');
+    expect(view!.playbackUrl).toBe('https://videos.example.com/orph01.webm');
     recordings.close();
   });
 });

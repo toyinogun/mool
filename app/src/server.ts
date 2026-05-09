@@ -11,7 +11,8 @@ const r2 = createR2(config.r2);
 const urls = createUrls({ publicAppUrl: config.publicAppUrl });
 const recordings = createRecordings({
   dbPath: path.join(config.dataDir, 'db.sqlite'),
-  r2,
+  mintUploadUrl: r2.mintUploadUrl,
+  publicUrl: r2.publicUrl,
   viewerUrl: urls.viewerUrl,
 });
 const viewerTemplate = readFileSync(

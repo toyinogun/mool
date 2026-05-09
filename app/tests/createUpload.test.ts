@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import type { R2 } from '../src/r2';
-import { buildTestApp, fakeR2 } from './helpers/testApp';
+import { buildTestApp } from './helpers/testApp';
 
 describe('POST /create-upload', () => {
   it('returns slug, uploadUrl, and viewerUrl on success', async () => {
@@ -38,16 +37,12 @@ describe('POST /create-upload', () => {
 
   it('accepts video/webm with codec parameter (e.g. video/webm;codecs=vp9) and round-trips it to R2', async () => {
     const seenContentTypes: string[] = [];
-    const captureR2: R2 = {
-      async mintUploadUrl({ key, contentType }) {
+    const { app, cleanup } = buildTestApp({
+      mintUploadUrl: async ({ key, contentType }) => {
         seenContentTypes.push(contentType);
         return `https://fake-r2.test/${key}?signed=1`;
       },
-      publicUrl(key) {
-        return `https://videos.example.com/${key}`;
-      },
-    };
-    const { app, cleanup } = buildTestApp({ r2: captureR2 });
+    });
     try {
       const res = await request(app)
         .post('/create-upload')
@@ -113,13 +108,11 @@ describe('POST /create-upload', () => {
   });
 
   it('returns 500 (not hang) when the recordings module rejects', async () => {
-    const failingR2: R2 = {
-      ...fakeR2(),
-      async mintUploadUrl() {
+    const { app, cleanup } = buildTestApp({
+      mintUploadUrl: async () => {
         throw new Error('R2 unavailable');
       },
-    };
-    const { app, cleanup } = buildTestApp({ r2: failingR2 });
+    });
     try {
       const res = await request(app)
         .post('/create-upload')

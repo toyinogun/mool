@@ -23,8 +23,7 @@ export interface Urls {
 }
 
 export function createUrls(cfg: UrlsConfig): Urls {
-  const baseUrl = cfg.publicAppUrl.replace(/\/+$/, '');
   return {
-    viewerUrl: (slug) => `${baseUrl}/v/${slug}`,
+    viewerUrl: (slug) => `${cfg.publicAppUrl}/v/${slug}`,
   };
 }

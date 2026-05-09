@@ -52,3 +52,31 @@ describe('loadConfig', () => {
     ).toThrow(/MAX_UPLOAD_BYTES/);
   });
 });
+
+describe('loadConfig invariants', () => {
+  it('throws when MAX_UPLOAD_BYTES is zero or negative', () => {
+    expect(() => loadConfig({ ...validEnv, MAX_UPLOAD_BYTES: '0' })).toThrow(/MAX_UPLOAD_BYTES/);
+    expect(() => loadConfig({ ...validEnv, MAX_UPLOAD_BYTES: '-1' })).toThrow(/MAX_UPLOAD_BYTES/);
+  });
+
+  it('throws when PORT is out of range', () => {
+    expect(() => loadConfig({ ...validEnv, PORT: '0' })).toThrow(/PORT/);
+    expect(() => loadConfig({ ...validEnv, PORT: '70000' })).toThrow(/PORT/);
+  });
+
+  it('throws when a URL var is malformed', () => {
+    expect(() => loadConfig({ ...validEnv, PUBLIC_APP_URL: 'not a url' })).toThrow(/PUBLIC_APP_URL/);
+    expect(() => loadConfig({ ...validEnv, R2_ENDPOINT: 'no-scheme.example.com' })).toThrow(/R2_ENDPOINT/);
+    expect(() => loadConfig({ ...validEnv, R2_PUBLIC_BASE_URL: '/relative' })).toThrow(/R2_PUBLIC_BASE_URL/);
+  });
+
+  it('strips trailing slashes from URL vars so callers can compose paths safely', () => {
+    const c = loadConfig({
+      ...validEnv,
+      PUBLIC_APP_URL: 'https://record.example.com/',
+      R2_PUBLIC_BASE_URL: 'https://videos.example.com///',
+    });
+    expect(c.publicAppUrl).toBe('https://record.example.com');
+    expect(c.r2.publicBaseUrl).toBe('https://videos.example.com');
+  });
+});

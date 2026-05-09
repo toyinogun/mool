@@ -26,10 +26,10 @@ export function viewerRoute(deps: ViewerDeps) {
     }
     // Bind to a const so the replacer closure (below) doesn't see `view`
     // widened back to `RecordingView | null`.
-    const { videoUrl } = view;
+    const { playbackUrl } = view;
     // Replacer function avoids $-interpretation in the replacement string,
     // so URLs containing $ characters substitute literally.
-    const html = deps.viewerTemplate.replace(/\{\{VIDEO_URL\}\}/g, () => videoUrl);
+    const html = deps.viewerTemplate.replace(/\{\{PLAYBACK_URL\}\}/g, () => playbackUrl);
     res.set('Content-Type', 'text/html; charset=utf-8').send(html);
   };
 }

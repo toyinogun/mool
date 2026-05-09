@@ -1,13 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
-import type { R2 } from '../src/r2';
 import type {
   CreateUploadResponse,
   CreateUploadErrorCode,
-  AllowedMime,
-} from '../src/contracts';
-import { ALLOWED_MIME } from '../src/contracts';
-import { buildTestApp, fakeR2 } from './helpers/testApp';
+} from '../src/routes/createUpload';
+import { ALLOWED_MIME, type AllowedMime } from '../src/recording';
+import { buildTestApp } from './helpers/testApp';
 
 describe('ALLOWED_MIME contract', () => {
   it('is the shared source of truth for accepted recorder content types', () => {
@@ -93,13 +91,11 @@ describe('POST /create-upload wire contract', () => {
 
     // internal_server_error (via failing R2)
     {
-      const failingR2: R2 = {
-        ...fakeR2(),
-        async mintUploadUrl() {
+      const { app, cleanup } = buildTestApp({
+        mintUploadUrl: async () => {
           throw new Error('R2 unavailable');
         },
-      };
-      const { app, cleanup } = buildTestApp({ r2: failingR2 });
+      });
       try {
         const res = await request(app)
           .post('/create-upload')

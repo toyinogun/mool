@@ -24,6 +24,10 @@ _Avoid_: signed URL, put URL, upload link
 The share link of the form `record.<domain>/v/<slug>` that opens the Viewer page.
 _Avoid_: share link, watch URL, public URL
 
+**Playback URL**:
+The public URL where R2 serves a Recording's bytes (`<publicBaseUrl>/<R2 key>`). The Viewer page embeds this in `<video src=...>`. The home server is not in this byte path.
+_Avoid_: video URL, source URL, bytes URL, public R2 URL
+
 **Recorder page**:
 The page served at `/` where a user starts a new Recording.
 _Avoid_: home page, capture page
@@ -37,7 +41,7 @@ _Avoid_: watch page, playback page
 - A **Recording** is identified by exactly one **Slug**
 - A **Recording**'s bytes live at exactly one **R2 key**
 - The **Recorder page** produces an **Upload URL** and a **Viewer URL** when a Recording is created
-- The **Viewer page** resolves a **Slug** to the public R2 location of the bytes
+- The **Viewer page** resolves a **Slug** to its **Playback URL**
 
 ## Example dialogue
 

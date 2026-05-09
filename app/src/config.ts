@@ -40,17 +40,42 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     return parsed;
   };
 
+  const positiveIntVar = (name: string, fallback: number): number => {
+    const v = intVar(name, fallback);
+    if (v <= 0) throw new Error(`Env var ${name} must be > 0, got: ${v}`);
+    return v;
+  };
+
+  const portVar = (name: string, fallback: number): number => {
+    const v = positiveIntVar(name, fallback);
+    if (v > 65535) throw new Error(`Env var ${name} must be <= 65535, got: ${v}`);
+    return v;
+  };
+
+  // Validates with the URL parser (catches typos like missing scheme) and
+  // strips trailing slashes so callers can compose paths via `${base}/${seg}`
+  // without thinking about doubled slashes.
+  const urlVar = (name: string): string => {
+    const raw = required(name);
+    try {
+      new URL(raw);
+    } catch {
+      throw new Error(`Env var ${name} must be a valid URL, got: ${raw}`);
+    }
+    return raw.replace(/\/+$/, '');
+  };
+
   return {
-    port: intVar('PORT', 3000),
+    port: portVar('PORT', 3000),
     dataDir: env.DATA_DIR ?? './data',
-    maxUploadBytes: intVar('MAX_UPLOAD_BYTES', 524_288_000),
-    publicAppUrl: required('PUBLIC_APP_URL'),
+    maxUploadBytes: positiveIntVar('MAX_UPLOAD_BYTES', 524_288_000),
+    publicAppUrl: urlVar('PUBLIC_APP_URL'),
     r2: {
       accessKeyId: required('R2_ACCESS_KEY_ID'),
       secretAccessKey: required('R2_SECRET_ACCESS_KEY'),
       bucket: required('R2_BUCKET'),
-      endpoint: required('R2_ENDPOINT'),
-      publicBaseUrl: required('R2_PUBLIC_BASE_URL'),
+      endpoint: urlVar('R2_ENDPOINT'),
+      publicBaseUrl: urlVar('R2_PUBLIC_BASE_URL'),
     },
   };
 }
