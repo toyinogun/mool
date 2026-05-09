@@ -134,10 +134,13 @@ export function transition(state, event) {
 
     case 'DisplayMediaGranted': {
       if (state.kind !== 'Starting') return noop(state);
+      const startRecording = state.audioStream
+        ? { type: 'startRecording', stream: event.stream, audioStream: state.audioStream }
+        : { type: 'startRecording', stream: event.stream };
       return {
         next: { kind: 'Capturing' },
         effects: [
-          { type: 'startRecording', stream: event.stream },
+          startRecording,
           { type: 'setStatus', message: 'Recording…' },
           { type: 'setButtons', startEnabled: false, stopEnabled: true },
           { type: 'startTimer' },
@@ -147,12 +150,17 @@ export function transition(state, event) {
 
     case 'DisplayMediaFailed': {
       if (state.kind !== 'Starting') return noop(state);
+      const effects = [];
+      if (state.audioStream) {
+        effects.push({ type: 'releaseStream' });
+      }
+      effects.push(
+        { type: 'setStatus', message: `Could not start capture: ${event.reason}` },
+        { type: 'setButtons', startEnabled: true, stopEnabled: false },
+      );
       return {
         next: { kind: 'Failed', message: event.reason },
-        effects: [
-          { type: 'setStatus', message: `Could not start capture: ${event.reason}` },
-          { type: 'setButtons', startEnabled: true, stopEnabled: false },
-        ],
+        effects,
       };
     }
 

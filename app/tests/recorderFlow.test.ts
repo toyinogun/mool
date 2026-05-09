@@ -373,6 +373,44 @@ describe('transition: RequestingMic', () => {
   });
 });
 
+describe('transition: Starting{audioStream}', () => {
+  const startingWithAudio = { kind: 'Starting' as const, audioStream: fakeStream };
+
+  it('DisplayMediaGranted → Capturing + startRecording{stream, audioStream} + UI updates', () => {
+    const screenStream = { id: 'screen' } as unknown as MediaStream;
+    const r = transition(startingWithAudio, {
+      type: 'DisplayMediaGranted',
+      stream: screenStream,
+    });
+    expect(r.next).toEqual({ kind: 'Capturing' });
+    expect(r.effects).toEqual([
+      { type: 'startRecording', stream: screenStream, audioStream: fakeStream },
+      { type: 'setStatus', message: 'Recording…' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: true },
+      { type: 'startTimer' },
+    ]);
+  });
+
+  it('DisplayMediaFailed → Failed + releases the held mic stream', () => {
+    const r = transition(startingWithAudio, {
+      type: 'DisplayMediaFailed',
+      reason: 'NotAllowedError — user dismissed',
+    });
+    expect(r.next).toEqual({
+      kind: 'Failed',
+      message: 'NotAllowedError — user dismissed',
+    });
+    expect(r.effects).toEqual([
+      { type: 'releaseStream' },
+      {
+        type: 'setStatus',
+        message: 'Could not start capture: NotAllowedError — user dismissed',
+      },
+      { type: 'setButtons', startEnabled: true, stopEnabled: false },
+    ]);
+  });
+});
+
 describe('full happy-path replay', () => {
   it('Idle → Starting → Capturing → Stopping → MintingUrl → Uploading → Done', () => {
     const blob = bytes(1024, 'video/webm;codecs=vp9');
