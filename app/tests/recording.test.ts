@@ -231,3 +231,34 @@ describe('createRecordings.create slug collision retry', () => {
     db.close();
   });
 });
+
+describe('createRecordings.create orphan-row policy on R2 failure', () => {
+  it('propagates the R2 error and leaves the row inserted (orphaned by design)', async () => {
+    const db = openDb(':memory:');
+    const failingR2: R2 = {
+      async mintUploadUrl() {
+        throw new Error('R2 unavailable');
+      },
+      publicUrl(key) {
+        return `https://videos.example.com/${key}`;
+      },
+    };
+    const recordings = createRecordings({
+      db,
+      r2: failingR2,
+      publicAppUrl: PUBLIC_APP_URL,
+      generateSlug: () => 'orph01',
+    });
+
+    await expect(
+      recordings.create({ contentType: 'video/webm', sizeBytes: 100 }),
+    ).rejects.toThrow(/R2 unavailable/);
+
+    // Orphan-by-design: the row exists, the R2 object never lands.
+    // See docs/adr/0002. A future sweeper (v0.4) reconciles.
+    const orphan = db.getRecording('orph01');
+    expect(orphan).not.toBeNull();
+    expect(orphan!.r2Key).toBe('orph01.webm');
+    db.close();
+  });
+});
