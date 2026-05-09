@@ -20,8 +20,6 @@ const VIEWER_TEMPLATE_STUB = `<!doctype html>
 
 export interface BuildTestAppOpts {
   maxUploadBytes?: number;
-  /** Override the recordings module entirely (e.g. to inject a failing R2). */
-  recordings?: Recordings;
   /** Override the R2 adapter used to construct the default recordings module. */
   r2?: R2;
 }
@@ -33,13 +31,11 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
   cleanup: () => void;
 } {
   const db = openDb(':memory:');
-  const recordings =
-    opts.recordings ??
-    createRecordings({
-      db,
-      r2: opts.r2 ?? fakeR2(),
-      publicAppUrl: 'https://record.example.com',
-    });
+  const recordings = createRecordings({
+    db,
+    r2: opts.r2 ?? fakeR2(),
+    publicAppUrl: 'https://record.example.com',
+  });
   const app = createApp({
     recordings,
     maxUploadBytes: opts.maxUploadBytes ?? 500 * 1024 * 1024,
