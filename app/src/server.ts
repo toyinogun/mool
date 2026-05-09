@@ -1,18 +1,16 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { loadConfig } from './config';
-import { openDb } from './db';
 import { createR2 } from './r2';
 import { createRecordings } from './recording';
 import { createUrls } from './urls';
 import { createApp } from './app';
 
 const config = loadConfig();
-const db = openDb(path.join(config.dataDir, 'db.sqlite'));
 const r2 = createR2(config.r2);
 const urls = createUrls({ publicAppUrl: config.publicAppUrl });
 const recordings = createRecordings({
-  db,
+  dbPath: path.join(config.dataDir, 'db.sqlite'),
   r2,
   viewerUrl: urls.viewerUrl,
 });

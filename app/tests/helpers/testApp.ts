@@ -1,5 +1,4 @@
 import { createApp } from '../../src/app';
-import { openDb, type DB } from '../../src/db';
 import { createRecordings, type Recordings } from '../../src/recording';
 import type { R2 } from '../../src/r2';
 import { createUrls } from '../../src/urls';
@@ -23,20 +22,21 @@ export interface BuildTestAppOpts {
   maxUploadBytes?: number;
   /** Override the R2 adapter used to construct the default recordings module. */
   r2?: R2;
+  /** Override the slug generator — useful when a test needs a known slug. */
+  generateSlug?: () => string;
 }
 
 export function buildTestApp(opts: BuildTestAppOpts = {}): {
   app: Express;
-  db: DB;
   recordings: Recordings;
   cleanup: () => void;
 } {
-  const db = openDb(':memory:');
   const urls = createUrls({ publicAppUrl: 'https://record.example.com' });
   const recordings = createRecordings({
-    db,
+    dbPath: ':memory:',
     r2: opts.r2 ?? fakeR2(),
     viewerUrl: urls.viewerUrl,
+    generateSlug: opts.generateSlug,
   });
   const app = createApp({
     recordings,
@@ -44,5 +44,5 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
     viewerTemplate: VIEWER_TEMPLATE_STUB,
     publicDir: null,
   });
-  return { app, db, recordings, cleanup: () => db.close() };
+  return { app, recordings, cleanup: () => recordings.close() };
 }

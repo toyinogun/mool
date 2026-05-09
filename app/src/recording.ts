@@ -1,7 +1,9 @@
+import Database from 'better-sqlite3';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { DuplicateSlugError, type DB, type Recording } from './db';
 import type { R2 } from './r2';
-import type { CreateUploadResponse } from './contracts';
+import { ALLOWED_MIME, type CreateUploadResponse } from './contracts';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 export const SLUG_LENGTH = 6;
@@ -23,6 +25,44 @@ export class SlugGenerationExhaustedError extends Error {
   }
 }
 
+export class UnsupportedContentTypeError extends Error {
+  readonly contentType: string;
+  constructor(contentType: string) {
+    super(`Unsupported content type: "${contentType}"`);
+    this.name = 'UnsupportedContentTypeError';
+    this.contentType = contentType;
+  }
+}
+
+class DuplicateSlugError extends Error {
+  constructor(slug: string) {
+    super(`Recording with slug "${slug}" already exists`);
+    this.name = 'DuplicateSlugError';
+  }
+}
+
+function normalizeContentType(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  return raw.toLowerCase().replace(/\s+/g, '');
+}
+
+interface RecordingRow {
+  slug: string;
+  r2Key: string;
+  mimeType: string;
+  createdAt: number;
+}
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS recordings (
+  slug        TEXT PRIMARY KEY,
+  r2_key      TEXT NOT NULL,
+  mime_type   TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_recordings_created_at ON recordings(created_at);
+`;
+
 export interface CreateRecordingArgs {
   contentType: string;
   sizeBytes: number;
@@ -43,10 +83,12 @@ export interface RecordingView {
 export interface Recordings {
   create(args: CreateRecordingArgs): Promise<CreatedRecording>;
   get(slug: string): Promise<RecordingView | null>;
+  close(): void;
 }
 
 export interface RecordingsDeps {
-  db: DB;
+  /** Path to the SQLite file; use ':memory:' for tests. */
+  dbPath: string;
   r2: R2;
   /** Builds the absolute Viewer URL for a Recording. Owned by `urls.ts` — see docs/adr/0003. */
   viewerUrl: (slug: string) => string;
@@ -68,19 +110,53 @@ function r2KeyForSlug(slug: string): string {
 }
 
 export function createRecordings(deps: RecordingsDeps): Recordings {
+  if (deps.dbPath !== ':memory:') {
+    mkdirSync(dirname(deps.dbPath), { recursive: true });
+  }
+  const db = new Database(deps.dbPath);
+  db.pragma('journal_mode = WAL');
+  db.exec(SCHEMA);
+
+  const insertStmt = db.prepare(
+    `INSERT INTO recordings (slug, r2_key, mime_type, created_at) VALUES (?, ?, ?, ?)`,
+  );
+  const getStmt = db.prepare(
+    `SELECT slug, r2_key AS r2Key, mime_type AS mimeType, created_at AS createdAt
+     FROM recordings WHERE slug = ?`,
+  );
+
+  function insertRow(row: RecordingRow): void {
+    try {
+      insertStmt.run(row.slug, row.r2Key, row.mimeType, row.createdAt);
+    } catch (err) {
+      if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+        throw new DuplicateSlugError(row.slug);
+      }
+      throw err;
+    }
+  }
+
+  function getRow(slug: string): RecordingRow | null {
+    return (getStmt.get(slug) as RecordingRow | undefined) ?? null;
+  }
+
   const generateSlug = deps.generateSlug ?? defaultGenerateSlug;
 
   return {
     async create({ contentType, sizeBytes }) {
+      const normalizedContentType = normalizeContentType(contentType);
+      if (!(ALLOWED_MIME as readonly string[]).includes(normalizedContentType)) {
+        throw new UnsupportedContentTypeError(String(contentType));
+      }
       let lastErr: unknown = null;
       for (let i = 0; i < MAX_SLUG_TRIES; i++) {
         const slug = generateSlug();
         const r2Key = r2KeyForSlug(slug);
         try {
-          deps.db.insertRecording({
+          insertRow({
             slug,
             r2Key,
-            mimeType: contentType,
+            mimeType: normalizedContentType,
             createdAt: Date.now(),
           });
         } catch (err) {
@@ -91,12 +167,12 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
           throw err;
         }
         // Row inserted. Mint the upload URL. If R2 fails here the row is
-        // orphaned by design (see docs/adr/0002): R2 is the
-        // source of truth, the viewer 404s, and a sweeper can be added with
-        // accounts in v0.4. We deliberately do NOT roll the row back.
+        // orphaned by design (see docs/adr/0002): R2 is the source of truth,
+        // the viewer 404s, and a sweeper can be added with accounts in v0.4.
+        // We deliberately do NOT roll the row back.
         const uploadUrl = await deps.r2.mintUploadUrl({
           key: r2Key,
-          contentType,
+          contentType: normalizedContentType,
           sizeBytes,
         });
         return {
@@ -113,12 +189,16 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
 
     async get(slug) {
       if (!isValidSlug(slug)) return null;
-      const row: Recording | null = deps.db.getRecording(slug);
+      const row = getRow(slug);
       if (!row) return null;
       return {
         slug: row.slug,
         videoUrl: deps.r2.publicUrl(row.r2Key),
       };
+    },
+
+    close() {
+      db.close();
     },
   };
 }
