@@ -16,6 +16,10 @@ describe('GET /v/:slug', () => {
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toContain('text/html');
       expect(res.text).toContain('https://videos.example.com/abc123.webm');
+      // Pin: no `{{IDENT}}` placeholder survived substitution. Closes the
+      // silent-typo hazard if a future placeholder is added to viewer.html
+      // but the route forgets to wire it up.
+      expect(res.text).not.toMatch(/\{\{[A-Z_]+\}\}/);
     } finally {
       cleanup();
     }
