@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { openDb } from '../src/db';
+import { openDb, DuplicateSlugError } from '../src/db';
 
 describe('openDb', () => {
   it('round-trips a recording', () => {
@@ -25,7 +25,7 @@ describe('openDb', () => {
     db.close();
   });
 
-  it('throws on duplicate slug (PRIMARY KEY constraint)', () => {
+  it('throws DuplicateSlugError on duplicate slug', () => {
     const db = openDb(':memory:');
     const rec = {
       slug: 'dup001',
@@ -41,7 +41,8 @@ describe('openDb', () => {
       caught = e as Error;
     }
     expect(caught).not.toBeNull();
-    expect((caught as { code?: string }).code).toBe('SQLITE_CONSTRAINT_PRIMARYKEY');
+    expect(caught).toBeInstanceOf(DuplicateSlugError);
+    expect((caught as DuplicateSlugError).slug).toBe('dup001');
     db.close();
   });
 });

@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { generateSlug } from '../slug';
 import type { DB } from '../db';
+import { DuplicateSlugError } from '../db';
 import type { R2 } from '../r2';
 
 const ALLOWED_MIME = new Set(['video/webm', 'video/webm;codecs=vp9']);
@@ -63,8 +64,7 @@ export function createUploadRoute(deps: CreateUploadDeps) {
         inserted = true;
         break;
       } catch (err) {
-        const code = (err as { code?: string }).code;
-        if (code === 'SQLITE_CONSTRAINT_PRIMARYKEY') continue;
+        if (err instanceof DuplicateSlugError) continue;
         throw err;
       }
     }
