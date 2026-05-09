@@ -35,7 +35,7 @@ export function createR2(cfg: R2Config): R2 {
       return getSignedUrl(client, cmd, { expiresIn: 60 * 15 });
     },
     publicUrl(key) {
-      return `${cfg.publicBaseUrl.replace(/\/$/, '')}/${key}`;
+      return `${cfg.publicBaseUrl.replace(/\/+$/, '')}/${key}`;
     },
   };
 }
