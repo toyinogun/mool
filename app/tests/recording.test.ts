@@ -116,6 +116,20 @@ describe('createRecordings.create content-type validation', () => {
     recordings.close();
   });
 
+  it('accepts video/webm;codecs=vp9,opus (v0.2 mic-enabled literal)', async () => {
+    const recordings = createRecordings({
+      dbPath: ':memory:',
+      ...fakeR2(),
+      viewerUrl: viewerUrlFor,
+    });
+    const result = await recordings.create({
+      contentType: 'video/webm;codecs=vp9,opus',
+      sizeBytes: 1,
+    });
+    expect(result.slug).toMatch(/^[A-Za-z0-9]{6}$/);
+    recordings.close();
+  });
+
   it('normalizes case and whitespace before validating', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',

@@ -2,11 +2,17 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
-export type AllowedMime = 'video/webm' | 'video/webm;codecs=vp9';
+export type AllowedMime =
+  | 'video/webm'
+  | 'video/webm;codecs=vp9'
+  | 'video/webm;codecs=vp9,opus'
+  | 'video/webm;codecs=vp8,opus';
 
 export const ALLOWED_MIME: readonly AllowedMime[] = Object.freeze([
   'video/webm',
   'video/webm;codecs=vp9',
+  'video/webm;codecs=vp9,opus',
+  'video/webm;codecs=vp8,opus',
 ]);
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
