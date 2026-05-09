@@ -25,10 +25,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     return v;
   };
 
+  const intVar = (name: string, fallback: number): number => {
+    const raw = env[name];
+    if (raw === undefined || raw === '') return fallback;
+    const parsed = parseInt(raw, 10);
+    if (Number.isNaN(parsed)) {
+      throw new Error(`Env var ${name} must be an integer, got: ${raw}`);
+    }
+    return parsed;
+  };
+
   return {
-    port: parseInt(env.PORT ?? '3000', 10),
+    port: intVar('PORT', 3000),
     dataDir: env.DATA_DIR ?? './data',
-    maxUploadBytes: parseInt(env.MAX_UPLOAD_BYTES ?? '524288000', 10),
+    maxUploadBytes: intVar('MAX_UPLOAD_BYTES', 524_288_000),
     publicAppUrl: required('PUBLIC_APP_URL'),
     r2: {
       accessKeyId: required('R2_ACCESS_KEY_ID'),

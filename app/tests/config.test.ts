@@ -37,4 +37,18 @@ describe('loadConfig', () => {
     const { R2_BUCKET, ...partial } = validEnv;
     expect(() => loadConfig(partial)).toThrow(/R2_BUCKET/);
   });
+
+  it('respects PORT override', () => {
+    expect(loadConfig({ ...validEnv, PORT: '8080' }).port).toBe(8080);
+  });
+
+  it('throws when PORT is not an integer', () => {
+    expect(() => loadConfig({ ...validEnv, PORT: 'abc' })).toThrow(/PORT/);
+  });
+
+  it('throws when MAX_UPLOAD_BYTES is not an integer', () => {
+    expect(() =>
+      loadConfig({ ...validEnv, MAX_UPLOAD_BYTES: 'huge' }),
+    ).toThrow(/MAX_UPLOAD_BYTES/);
+  });
 });
