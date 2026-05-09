@@ -30,7 +30,7 @@ export function createUploadRoute(deps: CreateUploadDeps) {
     const sizeBytes = body.sizeBytes;
     if (
       typeof sizeBytes !== 'number' ||
-      !Number.isFinite(sizeBytes) ||
+      !Number.isInteger(sizeBytes) ||
       sizeBytes <= 0
     ) {
       res.status(400).json({ error: 'invalid_size_bytes' });
@@ -50,6 +50,10 @@ export function createUploadRoute(deps: CreateUploadDeps) {
       slug = generateSlug();
       r2Key = `${slug}.webm`;
       try {
+        // If mintUploadUrl rejects below, this row is orphaned (no R2 object
+        // ever lands at this slug). Acceptable for v0.1 — the slug namespace is
+        // ~57B, the viewer 404s, and R2 is the source of truth. Add a sweeper
+        // when accounts/library land in v0.4.
         deps.db.insertRecording({
           slug,
           r2Key,

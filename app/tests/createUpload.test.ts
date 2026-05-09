@@ -93,6 +93,19 @@ describe('POST /create-upload', () => {
     }
   });
 
+  it('rejects non-integer sizeBytes with 400', async () => {
+    const { app, cleanup } = buildTestApp();
+    try {
+      const res = await request(app)
+        .post('/create-upload')
+        .send({ contentType: 'video/webm', sizeBytes: 1.5 });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('invalid_size_bytes');
+    } finally {
+      cleanup();
+    }
+  });
+
   it('rejects sizeBytes over the cap with 413', async () => {
     const { app, cleanup } = buildTestApp({ maxUploadBytes: 1024 });
     try {
