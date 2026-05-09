@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { loadConfig } from './config';
 import { createR2 } from './r2';
@@ -8,6 +8,7 @@ import { createViewerPage } from './viewerPage';
 import { createApp } from './app';
 
 const config = loadConfig();
+mkdirSync(config.dataDir, { recursive: true });
 const r2 = createR2(config.r2);
 const urls = createUrls({ publicAppUrl: config.publicAppUrl });
 const recordings = createRecordings({

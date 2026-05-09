@@ -1,6 +1,4 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
 export type AllowedMime =
   | 'video/webm'
@@ -154,9 +152,6 @@ function r2KeyForSlug(slug: string): string {
 }
 
 export function createRecordings(deps: RecordingsDeps): Recordings {
-  if (deps.dbPath !== ':memory:') {
-    mkdirSync(dirname(deps.dbPath), { recursive: true });
-  }
   const db = new Database(deps.dbPath);
   db.pragma('journal_mode = WAL');
   db.exec(SCHEMA);
