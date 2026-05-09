@@ -56,26 +56,75 @@ video { width: 100%; max-height: 80vh; border-radius: 8px; background: #000; }
 .footer { margin-top: 1rem; color: var(--muted); }
 .footer a { color: var(--muted); }
 
-.mic-toggle {
+.toggle-row {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
   margin-bottom: 1rem;
-  color: var(--muted);
-  font-size: 0.95rem;
+  flex-wrap: wrap;
 }
-.mic-toggle label {
+.toggle-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.95rem;
   cursor: pointer;
   user-select: none;
 }
-.mic-toggle input[type="checkbox"] {
+.toggle-pill input[type="checkbox"] {
   width: 1rem;
   height: 1rem;
   margin: 0;
   cursor: pointer;
 }
-.mic-toggle input[type="checkbox"]:disabled,
-.mic-toggle label:has(input:disabled) {
+.toggle-pill:has(input:disabled) {
   cursor: not-allowed;
   opacity: 0.4;
+}
+.toggle-pill input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.cam-preview-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.5rem 0 1rem;
+}
+.cam-preview {
+  width: 110px;
+  height: 110px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #000;
+  border: 2px solid var(--border);
+  /* Mirror the preview only; the recorded webcam is drawn un-mirrored
+     by recorderComposite.js so on-screen text is right-reading. */
+  transform: scaleX(-1);
+}
+.cam-preview-hidden {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  margin: 0.5rem 0 1rem;
+  font-size: 0.95rem;
+}
+.link-button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--fg);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+}
+.link-button:hover {
+  color: var(--primary);
 }
