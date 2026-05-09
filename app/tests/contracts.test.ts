@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import type {
   CreateUploadResponse,
   CreateUploadErrorCode,
 } from '../src/routes/createUpload';
 import { ALLOWED_MIME, type AllowedMime } from '../src/recording';
+import { pickMimeType } from '../src/public/recorderCapture.js';
 import { buildTestApp } from './helpers/testApp';
 
 describe('ALLOWED_MIME contract', () => {
@@ -26,6 +27,58 @@ describe('ALLOWED_MIME contract', () => {
     ];
     for (const s of samples) expect(ALLOWED_MIME).toContain(s);
   });
+});
+
+// The Recorder page's `pickMimeType` chooses one of these codecs based on
+// browser support; the server's `ALLOWED_MIME` must accept whatever it picks.
+// The test enumerates every (hasAudio, supports) combination so a future
+// branch added to `pickMimeType` is automatically exercised against the
+// server's allow-list — closing the silent-drift hazard the author flagged
+// in `recorderCapture.js:11–13` ("pure rule referenced cross-tier").
+describe('pickMimeType output is a subset of ALLOWED_MIME', () => {
+  const TYPED_MIMES = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm;codecs=vp9',
+  ] as const;
+
+  const subsetsOf = <T>(items: readonly T[]): T[][] => {
+    const out: T[][] = [];
+    for (let mask = 0; mask < 1 << items.length; mask++) {
+      out.push(items.filter((_, i) => (mask >> i) & 1));
+    }
+    return out;
+  };
+
+  const cases = [true, false].flatMap((hasAudio) =>
+    subsetsOf(TYPED_MIMES).map((supports) => ({
+      hasAudio,
+      supports,
+      label: supports.length === 0 ? '∅' : supports.join(', '),
+    })),
+  );
+
+  let supported: Set<string>;
+
+  beforeEach(() => {
+    supported = new Set();
+    vi.stubGlobal('MediaRecorder', {
+      isTypeSupported: (m: string) => supported.has(m),
+    });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each(cases)(
+    'pickMimeType(hasAudio=$hasAudio, supports={$label}) ∈ ALLOWED_MIME',
+    ({ hasAudio, supports }) => {
+      for (const m of supports) supported.add(m);
+      const result = pickMimeType(hasAudio);
+      expect(ALLOWED_MIME).toContain(result);
+    },
+  );
 });
 
 describe('POST /create-upload wire contract', () => {
