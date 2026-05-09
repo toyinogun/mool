@@ -21,8 +21,8 @@ describe('recorderFlow.initialState', () => {
 
 describe('transition: Idle', () => {
   it('StartClicked{audioEnabled:false} → Starting + clears UI + requests display media', () => {
-    const r = transition(initialState(), { type: 'StartClicked', audioEnabled: false });
-    expect(r.next).toEqual({ kind: 'Starting' });
+    const r = transition(initialState(), { type: 'StartClicked', audioEnabled: false, videoEnabled: false });
+    expect(r.next).toEqual({ kind: 'Starting', videoEnabled: false });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
       { type: 'setStatus', message: '' },
@@ -54,13 +54,13 @@ describe('transition: Idle', () => {
 });
 
 describe('transition: Starting', () => {
-  const start = { kind: 'Starting' as const };
+  const start = { kind: 'Starting' as const, videoEnabled: false };
 
   it('DisplayMediaGranted → Capturing + start recording + UI updates', () => {
     const r = transition(start, { type: 'DisplayMediaGranted', stream: fakeStream });
     expect(r.next).toEqual({ kind: 'Capturing' });
     expect(r.effects).toEqual([
-      { type: 'startRecording', stream: fakeStream },
+      { type: 'startRecording', stream: fakeStream, videoEnabled: false },
       { type: 'setStatus', message: 'Recording…' },
       { type: 'setButtons', startEnabled: false, stopEnabled: true },
       { type: 'startTimer' },
@@ -117,7 +117,7 @@ describe('transition: Capturing', () => {
   });
 
   it('ignores StartClicked (already capturing)', () => {
-    const r = transition(capturing, { type: 'StartClicked', audioEnabled: false });
+    const r = transition(capturing, { type: 'StartClicked', audioEnabled: false, videoEnabled: false });
     expect(r.next).toEqual(capturing);
     expect(r.effects).toEqual([]);
   });
@@ -284,8 +284,8 @@ describe('transition: Done', () => {
   });
 
   it('StartClicked → Starting + clears UI (allows re-recording)', () => {
-    const r = transition(done, { type: 'StartClicked', audioEnabled: false });
-    expect(r.next).toEqual({ kind: 'Starting' });
+    const r = transition(done, { type: 'StartClicked', audioEnabled: false, videoEnabled: false });
+    expect(r.next).toEqual({ kind: 'Starting', videoEnabled: false });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
       { type: 'setStatus', message: '' },
@@ -299,8 +299,8 @@ describe('transition: Failed', () => {
   const failed = { kind: 'Failed' as const, message: 'NotAllowedError' };
 
   it('StartClicked → Starting (allows retry after failure)', () => {
-    const r = transition(failed, { type: 'StartClicked', audioEnabled: false });
-    expect(r.next).toEqual({ kind: 'Starting' });
+    const r = transition(failed, { type: 'StartClicked', audioEnabled: false, videoEnabled: false });
+    expect(r.next).toEqual({ kind: 'Starting', videoEnabled: false });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
       { type: 'setStatus', message: '' },
@@ -318,8 +318,8 @@ describe('transition: Failed', () => {
 
 describe('transition: Idle (audioEnabled:true)', () => {
   it('StartClicked{audioEnabled:true} → RequestingMic + clears UI + requests user media', () => {
-    const r = transition(initialState(), { type: 'StartClicked', audioEnabled: true });
-    expect(r.next).toEqual({ kind: 'RequestingMic' });
+    const r = transition(initialState(), { type: 'StartClicked', audioEnabled: true, videoEnabled: false });
+    expect(r.next).toEqual({ kind: 'RequestingMic', videoEnabled: false });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
       { type: 'setStatus', message: '' },
@@ -330,11 +330,11 @@ describe('transition: Idle (audioEnabled:true)', () => {
 });
 
 describe('transition: RequestingMic', () => {
-  const requesting = { kind: 'RequestingMic' as const };
+  const requesting = { kind: 'RequestingMic' as const, videoEnabled: false };
 
   it('UserMediaGranted → Starting{audioStream} + requests display media', () => {
     const r = transition(requesting, { type: 'UserMediaGranted', stream: fakeStream });
-    expect(r.next).toEqual({ kind: 'Starting', audioStream: fakeStream });
+    expect(r.next).toEqual({ kind: 'Starting', audioStream: fakeStream, videoEnabled: false });
     expect(r.effects).toEqual([
       { type: 'requestDisplayMedia' },
     ]);
@@ -374,7 +374,7 @@ describe('transition: RequestingMic', () => {
 });
 
 describe('transition: Starting{audioStream}', () => {
-  const startingWithAudio = { kind: 'Starting' as const, audioStream: fakeStream };
+  const startingWithAudio = { kind: 'Starting' as const, audioStream: fakeStream, videoEnabled: false };
 
   it('DisplayMediaGranted → Capturing + startRecording{stream, audioStream} + UI updates', () => {
     const screenStream = { id: 'screen' } as unknown as MediaStream;
@@ -384,7 +384,7 @@ describe('transition: Starting{audioStream}', () => {
     });
     expect(r.next).toEqual({ kind: 'Capturing' });
     expect(r.effects).toEqual([
-      { type: 'startRecording', stream: screenStream, audioStream: fakeStream },
+      { type: 'startRecording', stream: screenStream, audioStream: fakeStream, videoEnabled: false },
       { type: 'setStatus', message: 'Recording…' },
       { type: 'setButtons', startEnabled: false, stopEnabled: true },
       { type: 'startTimer' },
@@ -411,12 +411,83 @@ describe('transition: Starting{audioStream}', () => {
   });
 });
 
+describe('transition: videoEnabled threading', () => {
+  it('Idle + StartClicked{a:false, v:true} → Starting{v:true} + requestDisplayMedia', () => {
+    const r = transition(initialState(), { type: 'StartClicked', audioEnabled: false, videoEnabled: true });
+    expect(r.next).toEqual({ kind: 'Starting', videoEnabled: true });
+    expect(r.effects).toEqual([
+      { type: 'hideResult' },
+      { type: 'setStatus', message: '' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: false },
+      { type: 'requestDisplayMedia' },
+    ]);
+  });
+
+  it('Idle + StartClicked{a:true, v:true} → RequestingMic{v:true} + requestUserMedia', () => {
+    const r = transition(initialState(), { type: 'StartClicked', audioEnabled: true, videoEnabled: true });
+    expect(r.next).toEqual({ kind: 'RequestingMic', videoEnabled: true });
+    expect(r.effects).toEqual([
+      { type: 'hideResult' },
+      { type: 'setStatus', message: '' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: false },
+      { type: 'requestUserMedia' },
+    ]);
+  });
+
+  it('RequestingMic{v:true} + UserMediaGranted → Starting{audioStream, v:true} + requestDisplayMedia', () => {
+    const requesting = { kind: 'RequestingMic' as const, videoEnabled: true };
+    const r = transition(requesting, { type: 'UserMediaGranted', stream: fakeStream });
+    expect(r.next).toEqual({ kind: 'Starting', audioStream: fakeStream, videoEnabled: true });
+    expect(r.effects).toEqual([{ type: 'requestDisplayMedia' }]);
+  });
+
+  it('Starting{v:true} (no mic) + DisplayMediaGranted → Capturing + startRecording{stream, videoEnabled:true} (no audioStream)', () => {
+    const starting = { kind: 'Starting' as const, videoEnabled: true };
+    const screen = { id: 'screen' } as unknown as MediaStream;
+    const r = transition(starting, { type: 'DisplayMediaGranted', stream: screen });
+    expect(r.next).toEqual({ kind: 'Capturing' });
+    expect(r.effects).toEqual([
+      { type: 'startRecording', stream: screen, videoEnabled: true },
+      { type: 'setStatus', message: 'Recording…' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: true },
+      { type: 'startTimer' },
+    ]);
+  });
+
+  it('Starting{audioStream, v:true} + DisplayMediaGranted → Capturing + startRecording{stream, audioStream, videoEnabled:true}', () => {
+    const starting = { kind: 'Starting' as const, audioStream: fakeStream, videoEnabled: true };
+    const screen = { id: 'screen' } as unknown as MediaStream;
+    const r = transition(starting, { type: 'DisplayMediaGranted', stream: screen });
+    expect(r.next).toEqual({ kind: 'Capturing' });
+    expect(r.effects).toEqual([
+      { type: 'startRecording', stream: screen, audioStream: fakeStream, videoEnabled: true },
+      { type: 'setStatus', message: 'Recording…' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: true },
+      { type: 'startTimer' },
+    ]);
+  });
+
+  it('Starting{audioStream, v:true} + DisplayMediaFailed → Failed + releaseStream (camera held outside SM)', () => {
+    // Camera lives in the adapter; the reducer never emits a "release camera"
+    // effect. releaseStream is emitted because the held mic stream needs
+    // cleanup; the camera stays held by the adapter (toggle still on).
+    const starting = { kind: 'Starting' as const, audioStream: fakeStream, videoEnabled: true };
+    const r = transition(starting, { type: 'DisplayMediaFailed', reason: 'NotAllowedError — user dismissed' });
+    expect(r.next).toEqual({ kind: 'Failed', message: 'NotAllowedError — user dismissed' });
+    expect(r.effects).toEqual([
+      { type: 'releaseStream' },
+      { type: 'setStatus', message: 'Could not start capture: NotAllowedError — user dismissed' },
+      { type: 'setButtons', startEnabled: true, stopEnabled: false },
+    ]);
+  });
+});
+
 describe('full happy-path replay', () => {
   it('Idle → Starting → Capturing → Stopping → MintingUrl → Uploading → Done', () => {
     const blob = bytes(1024, 'video/webm;codecs=vp9');
     let s = initialState();
 
-    s = transition(s, { type: 'StartClicked', audioEnabled: false }).next;
+    s = transition(s, { type: 'StartClicked', audioEnabled: false, videoEnabled: false }).next;
     expect(s.kind).toBe('Starting');
 
     s = transition(s, { type: 'DisplayMediaGranted', stream: fakeStream }).next;

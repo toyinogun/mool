@@ -120,7 +120,7 @@ function formatElapsed(ms) {
 }
 
 startBtn.addEventListener('click', () =>
-  dispatch({ type: 'StartClicked', audioEnabled: micToggleEl.checked }),
+  dispatch({ type: 'StartClicked', audioEnabled: micToggleEl.checked, videoEnabled: false }),
 );
 stopBtn.addEventListener('click', () => dispatch({ type: 'StopClicked' }));
 copyBtn.addEventListener('click', () => dispatch({ type: 'CopyClicked' }));
