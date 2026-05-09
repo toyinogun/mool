@@ -12,6 +12,17 @@ export function isValidSlug(s: string): boolean {
   return SLUG_RE.test(s);
 }
 
+export class SlugGenerationExhaustedError extends Error {
+  readonly tries: number;
+  readonly lastError: unknown;
+  constructor({ tries, lastError }: { tries: number; lastError: unknown }) {
+    super(`slug_generation_exhausted after ${tries} tries (last: ${String(lastError)})`);
+    this.name = 'SlugGenerationExhaustedError';
+    this.tries = tries;
+    this.lastError = lastError;
+  }
+}
+
 export interface CreateRecordingArgs {
   contentType: string;
   sizeBytes: number;
@@ -94,9 +105,10 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
           viewerUrl: `${baseUrl}/v/${slug}`,
         };
       }
-      throw new Error(
-        `slug_generation_exhausted after ${MAX_SLUG_TRIES} tries (last: ${String(lastErr)})`,
-      );
+      throw new SlugGenerationExhaustedError({
+        tries: MAX_SLUG_TRIES,
+        lastError: lastErr,
+      });
     },
 
     get(slug) {

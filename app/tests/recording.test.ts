@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { openDb } from '../src/db';
-import { createRecordings, isValidSlug, SLUG_LENGTH } from '../src/recording';
+import {
+  createRecordings,
+  isValidSlug,
+  SLUG_LENGTH,
+  SlugGenerationExhaustedError,
+} from '../src/recording';
 import type { R2 } from '../src/r2';
 
 function fakeR2(): R2 {
@@ -252,9 +257,17 @@ describe('createRecordings.create slug collision retry', () => {
       },
     });
 
-    await expect(
-      recordings.create({ contentType: 'video/webm', sizeBytes: 100 }),
-    ).rejects.toThrow(/slug_generation_exhausted/);
+    const err = await recordings
+      .create({ contentType: 'video/webm', sizeBytes: 100 })
+      .then(
+        () => {
+          throw new Error('expected create to reject');
+        },
+        (e) => e,
+      );
+    expect(err).toBeInstanceOf(SlugGenerationExhaustedError);
+    expect((err as SlugGenerationExhaustedError).tries).toBe(5);
+    expect((err as SlugGenerationExhaustedError).lastError).toBeDefined();
     expect(calls).toBe(5);
     db.close();
   });
