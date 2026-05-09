@@ -80,7 +80,7 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
           throw err;
         }
         // Row inserted. Mint the upload URL. If R2 fails here the row is
-        // orphaned by design (see docs/adr/0002 and spec §10): R2 is the
+        // orphaned by design (see docs/adr/0002): R2 is the
         // source of truth, the viewer 404s, and a sweeper can be added with
         // accounts in v0.4. We deliberately do NOT roll the row back.
         const uploadUrl = await deps.r2.mintUploadUrl({
