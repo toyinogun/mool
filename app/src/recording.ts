@@ -2,8 +2,12 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import type { R2 } from './r2';
-import { ALLOWED_MIME, type CreateUploadResponse } from './contracts';
+export type AllowedMime = 'video/webm' | 'video/webm;codecs=vp9';
+
+export const ALLOWED_MIME: readonly AllowedMime[] = Object.freeze([
+  'video/webm',
+  'video/webm;codecs=vp9',
+]);
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 export const SLUG_LENGTH = 6;
@@ -68,16 +72,15 @@ export interface CreateRecordingArgs {
   sizeBytes: number;
 }
 
-/**
- * Deliberately aliased: the module's create-result IS the wire body today.
- * If a caller ever needs more than the wire ships (e.g. `createdAt` for an
- * authenticated dashboard), split this alias and have the route project.
- */
-export type CreatedRecording = CreateUploadResponse;
+export interface CreatedRecording {
+  slug: string;
+  uploadUrl: string;
+  viewerUrl: string;
+}
 
 export interface RecordingView {
   slug: string;
-  videoUrl: string;
+  playbackUrl: string;
 }
 
 export interface Recordings {
@@ -89,7 +92,14 @@ export interface Recordings {
 export interface RecordingsDeps {
   /** Path to the SQLite file; use ':memory:' for tests. */
   dbPath: string;
-  r2: R2;
+  /** Mints a presigned PUT URL the browser uses to upload bytes to R2. */
+  mintUploadUrl: (args: {
+    key: string;
+    contentType: string;
+    sizeBytes: number;
+  }) => Promise<string>;
+  /** Builds the public URL where R2 serves a stored object's bytes. */
+  publicUrl: (key: string) => string;
   /** Builds the absolute Viewer URL for a Recording. Owned by `urls.ts` — see docs/adr/0003. */
   viewerUrl: (slug: string) => string;
   /** Optional override for tests — defaults to the real CSPRNG-backed generator. */
@@ -170,7 +180,7 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
         // orphaned by design (see docs/adr/0002): R2 is the source of truth,
         // the viewer 404s, and a sweeper can be added with accounts in v0.4.
         // We deliberately do NOT roll the row back.
-        const uploadUrl = await deps.r2.mintUploadUrl({
+        const uploadUrl = await deps.mintUploadUrl({
           key: r2Key,
           contentType: normalizedContentType,
           sizeBytes,
@@ -193,7 +203,7 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
       if (!row) return null;
       return {
         slug: row.slug,
-        videoUrl: deps.r2.publicUrl(row.r2Key),
+        playbackUrl: deps.publicUrl(row.r2Key),
       };
     },
 

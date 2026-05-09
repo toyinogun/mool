@@ -2,16 +2,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { R2Config } from './config';
 
-export interface R2 {
-  mintUploadUrl(args: {
-    key: string;
-    contentType: string;
-    sizeBytes: number;
-  }): Promise<string>;
-  publicUrl(key: string): string;
-}
-
-export function createR2(cfg: R2Config): R2 {
+export function createR2(cfg: R2Config) {
   const client = new S3Client({
     region: 'auto',
     endpoint: cfg.endpoint,
@@ -23,7 +14,15 @@ export function createR2(cfg: R2Config): R2 {
   });
 
   return {
-    async mintUploadUrl({ key, contentType, sizeBytes }) {
+    async mintUploadUrl({
+      key,
+      contentType,
+      sizeBytes,
+    }: {
+      key: string;
+      contentType: string;
+      sizeBytes: number;
+    }): Promise<string> {
       const cmd = new PutObjectCommand({
         Bucket: cfg.bucket,
         Key: key,
@@ -34,8 +33,8 @@ export function createR2(cfg: R2Config): R2 {
       // short enough that a leaked URL is not durably abusable.
       return getSignedUrl(client, cmd, { expiresIn: 60 * 15 });
     },
-    publicUrl(key) {
-      return `${cfg.publicBaseUrl.replace(/\/+$/, '')}/${key}`;
+    publicUrl(key: string): string {
+      return `${cfg.publicBaseUrl}/${key}`;
     },
   };
 }

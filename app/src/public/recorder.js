@@ -9,8 +9,8 @@
  * @typedef {import('./recorderFlow.js').State} State
  * @typedef {import('./recorderFlow.js').Event} FlowEvent
  * @typedef {import('./recorderFlow.js').Effect} Effect
- * @typedef {import('../contracts').CreateUploadResponse} CreateUploadResponse
- * @typedef {import('../contracts').CreateUploadErrorResponse} CreateUploadErrorResponse
+ * @typedef {import('../routes/createUpload').CreateUploadResponse} CreateUploadResponse
+ * @typedef {import('../routes/createUpload').CreateUploadErrorResponse} CreateUploadErrorResponse
  */
 import { initialState, transition } from './recorderFlow.js';
 

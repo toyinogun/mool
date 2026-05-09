@@ -6,7 +6,6 @@ import express, {
   type RequestHandler,
 } from 'express';
 import type { Recordings } from './recording';
-import type { CreateUploadErrorResponse } from './contracts';
 import { createUploadRoute } from './routes/createUpload';
 import { viewerRoute } from './routes/viewer';
 import { VIEWER_ROUTE } from './urls';
@@ -56,8 +55,7 @@ export function createApp(deps: AppDeps): Express {
     (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
       console.error(err);
       if (res.headersSent) return;
-      const errBody: CreateUploadErrorResponse = { error: 'internal_server_error' };
-      res.status(500).json(errBody);
+      res.status(500).json({ error: 'internal_server_error' });
     },
   );
 
