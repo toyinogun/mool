@@ -134,6 +134,8 @@ export function transition(state, event) {
 
     case 'DisplayMediaGranted': {
       if (state.kind !== 'Starting') return noop(state);
+      // state.audioStream is set iff we entered via the mic-on path
+      // (StateStartingWithAudio); pass it through for the adapter to merge.
       const startRecording = state.audioStream
         ? { type: 'startRecording', stream: event.stream, audioStream: state.audioStream }
         : { type: 'startRecording', stream: event.stream };
@@ -151,6 +153,8 @@ export function transition(state, event) {
     case 'DisplayMediaFailed': {
       if (state.kind !== 'Starting') return noop(state);
       const effects = [];
+      // Mic-on path held an audioStream that startRecording never consumed;
+      // release it so the browser tab's mic indicator goes off.
       if (state.audioStream) {
         effects.push({ type: 'releaseStream' });
       }

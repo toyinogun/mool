@@ -68,6 +68,11 @@ function runEffect(eff) {
       }
       return;
     case 'releaseStream':
+      // After startRecording, the merged audio track is reachable via both
+      // activeStream.getTracks() and activeAudioStream.getTracks(). Stopping
+      // an already-ended MediaStreamTrack is a spec-defined no-op, so the
+      // double-stop here is harmless. Keep this assumption in mind if the
+      // .stop() call is ever replaced with something side-effectful.
       if (activeStream) {
         activeStream.getTracks().forEach((t) => t.stop());
         activeStream = null;
