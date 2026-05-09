@@ -96,12 +96,38 @@ export function transition(state, event) {
       if (state.kind !== 'Idle' && state.kind !== 'Done' && state.kind !== 'Failed') {
         return noop(state);
       }
+      const common = [
+        { type: 'hideResult' },
+        { type: 'setStatus', message: '' },
+        { type: 'setButtons', startEnabled: false, stopEnabled: false },
+      ];
+      if (event.audioEnabled) {
+        return {
+          next: { kind: 'RequestingMic' },
+          effects: [...common, { type: 'requestUserMedia' }],
+        };
+      }
       return {
         next: { kind: 'Starting' },
+        effects: [...common, { type: 'requestDisplayMedia' }],
+      };
+    }
+
+    case 'UserMediaGranted': {
+      if (state.kind !== 'RequestingMic') return noop(state);
+      return {
+        next: { kind: 'Starting', audioStream: event.stream },
+        effects: [{ type: 'requestDisplayMedia' }],
+      };
+    }
+
+    case 'UserMediaFailed': {
+      if (state.kind !== 'RequestingMic') return noop(state);
+      return {
+        next: { kind: 'Failed', message: event.reason },
         effects: [
-          { type: 'hideResult' },
-          { type: 'setStatus', message: '' },
-          { type: 'requestDisplayMedia' },
+          { type: 'setStatus', message: event.reason },
+          { type: 'setButtons', startEnabled: true, stopEnabled: false },
         ],
       };
     }
