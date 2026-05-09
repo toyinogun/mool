@@ -20,6 +20,7 @@ function fakeR2(): R2 {
 }
 
 const PUBLIC_APP_URL = 'https://record.example.com';
+const viewerUrlFor = (slug: string): string => `${PUBLIC_APP_URL}/v/${slug}`;
 
 describe('createRecordings.create', () => {
   it('returns slug, uploadUrl, and viewerUrl', async () => {
@@ -27,7 +28,7 @@ describe('createRecordings.create', () => {
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
     });
 
     const result = await recordings.create({
@@ -46,7 +47,7 @@ describe('createRecordings.create', () => {
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
     });
 
     const { slug } = await recordings.create({
@@ -78,7 +79,7 @@ describe('createRecordings.create', () => {
     const recordings = createRecordings({
       db,
       r2: capturingR2,
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
     });
 
     const { slug } = await recordings.create({
@@ -91,22 +92,6 @@ describe('createRecordings.create', () => {
     db.close();
   });
 
-  it('strips a trailing slash from publicAppUrl when building viewerUrl', async () => {
-    const db = openDb(':memory:');
-    const recordings = createRecordings({
-      db,
-      r2: fakeR2(),
-      publicAppUrl: 'https://record.example.com/',
-    });
-
-    const { slug, viewerUrl } = await recordings.create({
-      contentType: 'video/webm',
-      sizeBytes: 100,
-    });
-
-    expect(viewerUrl).toBe(`https://record.example.com/v/${slug}`);
-    db.close();
-  });
 });
 
 describe('createRecordings.get', () => {
@@ -115,7 +100,7 @@ describe('createRecordings.get', () => {
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
     });
 
     const result = recordings.get('zzzzzz');
@@ -135,7 +120,7 @@ describe('createRecordings.get', () => {
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
     });
 
     const got = await recordings.get('abc123');
@@ -151,7 +136,7 @@ describe('createRecordings.get', () => {
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
     });
 
     expect(await recordings.get('zzzzzz')).toBeNull();
@@ -163,7 +148,7 @@ describe('createRecordings.get', () => {
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
     });
 
     expect(await recordings.get('!!')).toBeNull();
@@ -197,7 +182,7 @@ describe('slug generation (via create)', () => {
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
     });
 
     const seen = new Set<string>();
@@ -235,7 +220,7 @@ describe('createRecordings.create slug collision retry', () => {
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
       generateSlug: () => slugs[i++],
     });
 
@@ -264,7 +249,7 @@ describe('createRecordings.create slug collision retry', () => {
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
       generateSlug: () => {
         calls++;
         return 'always';
@@ -301,7 +286,7 @@ describe('createRecordings.create orphan-row policy on R2 failure', () => {
     const recordings = createRecordings({
       db,
       r2: failingR2,
-      publicAppUrl: PUBLIC_APP_URL,
+      viewerUrl: viewerUrlFor,
       generateSlug: () => 'orph01',
     });
 

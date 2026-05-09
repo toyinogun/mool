@@ -48,7 +48,8 @@ export interface Recordings {
 export interface RecordingsDeps {
   db: DB;
   r2: R2;
-  publicAppUrl: string;
+  /** Builds the absolute Viewer URL for a Recording. Owned by `urls.ts` — see docs/adr/0003. */
+  viewerUrl: (slug: string) => string;
   /** Optional override for tests — defaults to the real CSPRNG-backed generator. */
   generateSlug?: () => string;
 }
@@ -68,7 +69,6 @@ function r2KeyForSlug(slug: string): string {
 
 export function createRecordings(deps: RecordingsDeps): Recordings {
   const generateSlug = deps.generateSlug ?? defaultGenerateSlug;
-  const baseUrl = deps.publicAppUrl.replace(/\/+$/, '');
 
   return {
     async create({ contentType, sizeBytes }) {
@@ -102,7 +102,7 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
         return {
           slug,
           uploadUrl,
-          viewerUrl: `${baseUrl}/v/${slug}`,
+          viewerUrl: deps.viewerUrl(slug),
         };
       }
       throw new SlugGenerationExhaustedError({
