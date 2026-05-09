@@ -5,8 +5,7 @@ import express, {
   type NextFunction,
   type RequestHandler,
 } from 'express';
-import type { DB } from './db';
-import type { R2 } from './r2';
+import type { Recordings } from './recording';
 import { createUploadRoute } from './routes/createUpload';
 import { viewerRoute } from './routes/viewer';
 
@@ -23,10 +22,8 @@ export function asyncRoute(fn: AsyncHandler): RequestHandler {
 }
 
 export interface AppDeps {
-  db: DB;
-  r2: R2;
+  recordings: Recordings;
   maxUploadBytes: number;
-  publicAppUrl: string;
   viewerTemplate: string;
   /** Absolute path to the static-assets directory, or null in tests. */
   publicDir: string | null;
@@ -40,8 +37,14 @@ export function createApp(deps: AppDeps): Express {
     res.json({ ok: true });
   });
 
-  app.get('/v/:slug', viewerRoute(deps));
-  app.post('/create-upload', asyncRoute(createUploadRoute(deps)));
+  app.get('/v/:slug', viewerRoute({
+    recordings: deps.recordings,
+    viewerTemplate: deps.viewerTemplate,
+  }));
+  app.post('/create-upload', asyncRoute(createUploadRoute({
+    recordings: deps.recordings,
+    maxUploadBytes: deps.maxUploadBytes,
+  })));
 
   if (deps.publicDir) {
     app.use(express.static(deps.publicDir));

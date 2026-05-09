@@ -1,5 +1,6 @@
 import { createApp } from '../../src/app';
 import { openDb, type DB } from '../../src/db';
+import { createRecordings, type Recordings } from '../../src/recording';
 import type { R2 } from '../../src/r2';
 import type { Express } from 'express';
 
@@ -17,19 +18,33 @@ export function fakeR2(): R2 {
 const VIEWER_TEMPLATE_STUB = `<!doctype html>
 <html><body><video src="{{VIDEO_URL}}"></video></body></html>`;
 
-export function buildTestApp(opts: { maxUploadBytes?: number } = {}): {
+export interface BuildTestAppOpts {
+  maxUploadBytes?: number;
+  /** Override the recordings module entirely (e.g. to inject a failing R2). */
+  recordings?: Recordings;
+  /** Override the R2 adapter used to construct the default recordings module. */
+  r2?: R2;
+}
+
+export function buildTestApp(opts: BuildTestAppOpts = {}): {
   app: Express;
   db: DB;
+  recordings: Recordings;
   cleanup: () => void;
 } {
   const db = openDb(':memory:');
+  const recordings =
+    opts.recordings ??
+    createRecordings({
+      db,
+      r2: opts.r2 ?? fakeR2(),
+      publicAppUrl: 'https://record.example.com',
+    });
   const app = createApp({
-    db,
-    r2: fakeR2(),
+    recordings,
     maxUploadBytes: opts.maxUploadBytes ?? 500 * 1024 * 1024,
-    publicAppUrl: 'https://record.example.com',
     viewerTemplate: VIEWER_TEMPLATE_STUB,
     publicDir: null,
   });
-  return { app, db, cleanup: () => db.close() };
+  return { app, db, recordings, cleanup: () => db.close() };
 }

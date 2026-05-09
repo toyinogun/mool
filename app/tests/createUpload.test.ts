@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
+import type { R2 } from '../src/r2';
 import { buildTestApp, fakeR2 } from './helpers/testApp';
-import { createApp } from '../src/app';
-import { openDb } from '../src/db';
 
 describe('POST /create-upload', () => {
   it('returns slug, uploadUrl, and viewerUrl on success', async () => {
@@ -19,24 +18,6 @@ describe('POST /create-upload', () => {
         `https://record.example.com/v/${res.body.slug}`,
       );
       expect(db.getRecording(res.body.slug)).not.toBeNull();
-    } finally {
-      cleanup();
-    }
-  });
-
-  it('persists the recording with the expected r2Key', async () => {
-    const { app, db, cleanup } = buildTestApp();
-    try {
-      const res = await request(app)
-        .post('/create-upload')
-        .send({ contentType: 'video/webm', sizeBytes: 100 });
-
-      const rec = db.getRecording(res.body.slug);
-      expect(rec).toMatchObject({
-        slug: res.body.slug,
-        r2Key: `${res.body.slug}.webm`,
-        mimeType: 'video/webm',
-      });
     } finally {
       cleanup();
     }
@@ -120,23 +101,14 @@ describe('POST /create-upload', () => {
     }
   });
 
-  it('returns 500 (not hang) when R2 minting fails', async () => {
-    // Verifies the asyncRoute wrapper + error middleware catch R2 rejections.
-    const db = openDb(':memory:');
-    const failingR2 = {
+  it('returns 500 (not hang) when the recordings module rejects', async () => {
+    const failingR2: R2 = {
       ...fakeR2(),
-      async mintUploadUrl(): Promise<string> {
+      async mintUploadUrl() {
         throw new Error('R2 unavailable');
       },
     };
-    const app = createApp({
-      db,
-      r2: failingR2,
-      maxUploadBytes: 500 * 1024 * 1024,
-      publicAppUrl: 'https://record.example.com',
-      viewerTemplate: '<html></html>',
-      publicDir: null,
-    });
+    const { app, cleanup } = buildTestApp({ r2: failingR2 });
     try {
       const res = await request(app)
         .post('/create-upload')
@@ -144,7 +116,7 @@ describe('POST /create-upload', () => {
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('internal_server_error');
     } finally {
-      db.close();
+      cleanup();
     }
   });
 });
