@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-const SLUG_LENGTH = 6;
+export const SLUG_LENGTH = 6;
 
 export function generateSlug(): string {
   const bytes = randomBytes(SLUG_LENGTH);
