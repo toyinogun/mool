@@ -56,6 +56,7 @@ describe('POST /create-upload wire contract', () => {
       'invalid_content_type',
       'invalid_size_bytes',
       'file_too_large',
+      'upload_mint_failed',
       'internal_server_error',
     ];
     const observed = new Set<string>();
@@ -99,7 +100,7 @@ describe('POST /create-upload wire contract', () => {
       }
     }
 
-    // internal_server_error (via failing R2)
+    // upload_mint_failed (via R2 throwing after the row is written; ADR-0009)
     {
       const { app, cleanup } = buildTestApp({
         mintUploadUrl: async () => {
@@ -110,6 +111,26 @@ describe('POST /create-upload wire contract', () => {
         const res = await request(app)
           .post('/create-upload')
           .send({ contentType: 'video/webm', sizeBytes: 100 });
+        observed.add(res.body.error);
+      } finally {
+        cleanup();
+      }
+    }
+
+    // internal_server_error (via SlugGenerationExhaustedError bubbling to the
+    // global handler in app.ts; the route itself never emits this code — see
+    // ADR-0006 — but the wire surface clients see does include it).
+    {
+      const { app, recordings, cleanup } = buildTestApp({
+        generateSlug: () => 'always',
+      });
+      try {
+        // Pre-claim the slug; the next /create-upload then exhausts retries.
+        await recordings.create({ contentType: 'video/webm', sizeBytes: 1 });
+        const res = await request(app)
+          .post('/create-upload')
+          .send({ contentType: 'video/webm', sizeBytes: 100 });
+        expect(res.status).toBe(500);
         observed.add(res.body.error);
       } finally {
         cleanup();

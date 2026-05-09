@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import {
   UnsupportedContentTypeError,
+  UploadMintFailedError,
   type CreatedRecording,
   type Recordings,
 } from '../recording';
@@ -15,6 +16,7 @@ export type CreateUploadErrorCode =
   | 'invalid_content_type'
   | 'invalid_size_bytes'
   | 'file_too_large'
+  | 'upload_mint_failed'
   | 'internal_server_error';
 
 export interface CreateUploadErrorResponse {
@@ -69,6 +71,14 @@ export function createUploadRoute(deps: CreateUploadDeps) {
       if (err instanceof UnsupportedContentTypeError) {
         const errBody: CreateUploadErrorResponse = { error: 'invalid_content_type' };
         res.status(400).json(errBody);
+        return;
+      }
+      if (err instanceof UploadMintFailedError) {
+        // R2-side failure after the row was written. Distinct from internal
+        // bugs (502 Bad Gateway, not 500): client may retry — a fresh slug
+        // will be allocated. The orphaned row stays per ADR-0002/0009.
+        const errBody: CreateUploadErrorResponse = { error: 'upload_mint_failed' };
+        res.status(502).json(errBody);
         return;
       }
       throw err;

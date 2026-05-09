@@ -44,6 +44,23 @@ export class UnsupportedContentTypeError extends Error {
   }
 }
 
+/**
+ * Thrown by `Recordings.create` when `mintUploadUrl` fails after the row has
+ * been written. The row is **not** rolled back — the Recording is best-effort,
+ * non-atomic by design (see ADR-0001, ADR-0002, ADR-0009). The orphaned slug
+ * is recoverable from `.slug` for logging or a future v0.4 sweeper.
+ */
+export class UploadMintFailedError extends Error {
+  readonly slug: string;
+  readonly cause: unknown;
+  constructor({ slug, cause }: { slug: string; cause: unknown }) {
+    super(`upload_mint_failed for slug "${slug}" (cause: ${String(cause)})`);
+    this.name = 'UploadMintFailedError';
+    this.slug = slug;
+    this.cause = cause;
+  }
+}
+
 class DuplicateSlugError extends Error {
   constructor(slug: string) {
     super(`Recording with slug "${slug}" already exists`);
@@ -90,6 +107,17 @@ export interface RecordingView {
 }
 
 export interface Recordings {
+  /**
+   * Creates a Recording: writes a row, mints an Upload URL, returns both URLs.
+   *
+   * @throws {UnsupportedContentTypeError} if `contentType` is not in `ALLOWED_MIME`.
+   *   The row is never written.
+   * @throws {SlugGenerationExhaustedError} after `MAX_SLUG_TRIES` consecutive
+   *   slug collisions. The row is never written.
+   * @throws {UploadMintFailedError} if `mintUploadUrl` rejects after the row
+   *   has been written. The row is **not** rolled back — see ADR-0001/0002/0009.
+   *   The orphaned slug is recoverable from the error.
+   */
   create(args: CreateRecordingArgs): Promise<CreatedRecording>;
   get(slug: string): Promise<RecordingView | null>;
   close(): void;
@@ -183,14 +211,20 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
           throw err;
         }
         // Row inserted. Mint the upload URL. If R2 fails here the row is
-        // orphaned by design (see docs/adr/0002): R2 is the source of truth,
-        // the viewer 404s, and a sweeper can be added with accounts in v0.4.
-        // We deliberately do NOT roll the row back.
-        const uploadUrl = await deps.mintUploadUrl({
-          key: r2Key,
-          contentType: normalizedContentType,
-          sizeBytes,
-        });
+        // orphaned by design (see docs/adr/0002, ADR-0009): R2 is the source
+        // of truth, the viewer 404s, a v0.4 sweeper reconciles. We deliberately
+        // do NOT roll the row back; we surface the failure as
+        // UploadMintFailedError so callers can distinguish it from internal bugs.
+        let uploadUrl: string;
+        try {
+          uploadUrl = await deps.mintUploadUrl({
+            key: r2Key,
+            contentType: normalizedContentType,
+            sizeBytes,
+          });
+        } catch (cause) {
+          throw new UploadMintFailedError({ slug, cause });
+        }
         return {
           slug,
           uploadUrl,

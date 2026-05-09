@@ -3,6 +3,7 @@ import {
   createRecordings,
   SlugGenerationExhaustedError,
   UnsupportedContentTypeError,
+  UploadMintFailedError,
 } from '../src/recording';
 function fakeR2() {
   return {
@@ -289,25 +290,34 @@ describe('createRecordings.create slug collision retry', () => {
 });
 
 describe('createRecordings.create orphan-row policy on R2 failure', () => {
-  it('propagates the R2 error and leaves the row inserted (orphaned by design)', async () => {
+  it('rejects with UploadMintFailedError (carrying the orphaned slug + cause) and leaves the row inserted', async () => {
+    const r2Cause = new Error('R2 unavailable');
     const recordings = createRecordings({
       dbPath: ':memory:',
       ...fakeR2(),
       mintUploadUrl: async () => {
-        throw new Error('R2 unavailable');
+        throw r2Cause;
       },
       viewerUrl: viewerUrlFor,
       generateSlug: () => 'orph01',
     });
 
-    await expect(
-      recordings.create({ contentType: 'video/webm', sizeBytes: 100 }),
-    ).rejects.toThrow(/R2 unavailable/);
+    const err = await recordings
+      .create({ contentType: 'video/webm', sizeBytes: 100 })
+      .then(
+        () => {
+          throw new Error('expected create to reject');
+        },
+        (e) => e,
+      );
+    expect(err).toBeInstanceOf(UploadMintFailedError);
+    expect((err as UploadMintFailedError).slug).toBe('orph01');
+    expect((err as UploadMintFailedError).cause).toBe(r2Cause);
 
     // Orphan-by-design: the row exists, the R2 object never lands. The
     // public read path returns a view because the row is present, even
-    // though the R2 object is missing. See docs/adr/0002. A future
-    // sweeper (v0.4) reconciles.
+    // though the R2 object is missing. See docs/adr/0002, docs/adr/0009.
+    // A future sweeper (v0.4) reconciles.
     const view = await recordings.get('orph01');
     expect(view).not.toBeNull();
     expect(view!.slug).toBe('orph01');

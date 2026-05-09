@@ -126,7 +126,7 @@ describe('POST /create-upload', () => {
     }
   });
 
-  it('returns 500 (not hang) when the recordings module rejects', async () => {
+  it('returns 502 upload_mint_failed when mintUploadUrl rejects (orphan-row case, ADR-0009)', async () => {
     const { app, cleanup } = buildTestApp({
       mintUploadUrl: async () => {
         throw new Error('R2 unavailable');
@@ -136,8 +136,8 @@ describe('POST /create-upload', () => {
       const res = await request(app)
         .post('/create-upload')
         .send({ contentType: 'video/webm', sizeBytes: 100 });
-      expect(res.status).toBe(500);
-      expect(res.body.error).toBe('internal_server_error');
+      expect(res.status).toBe(502);
+      expect(res.body.error).toBe('upload_mint_failed');
     } finally {
       cleanup();
     }
