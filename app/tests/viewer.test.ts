@@ -6,14 +6,11 @@ import type { Recordings } from '../src/recording';
 
 describe('GET /v/:slug', () => {
   it('returns HTML containing the public R2 URL for an existing slug', async () => {
-    const { app, db, cleanup } = buildTestApp();
+    const { app, recordings, cleanup } = buildTestApp({
+      generateSlug: () => 'abc123',
+    });
     try {
-      db.insertRecording({
-        slug: 'abc123',
-        r2Key: 'abc123.webm',
-        mimeType: 'video/webm',
-        createdAt: Date.now(),
-      });
+      await recordings.create({ contentType: 'video/webm', sizeBytes: 1 });
       const res = await request(app).get('/v/abc123');
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toContain('text/html');
@@ -55,6 +52,7 @@ describe('GET /v/:slug', () => {
       get: async () => {
         throw new Error('DB exploded');
       },
+      close: () => {},
     };
     const app = createApp({
       recordings: failingRecordings,

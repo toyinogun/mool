@@ -5,7 +5,7 @@ import { buildTestApp, fakeR2 } from './helpers/testApp';
 
 describe('POST /create-upload', () => {
   it('returns slug, uploadUrl, and viewerUrl on success', async () => {
-    const { app, db, cleanup } = buildTestApp();
+    const { app, recordings, cleanup } = buildTestApp();
     try {
       const res = await request(app)
         .post('/create-upload')
@@ -17,7 +17,7 @@ describe('POST /create-upload', () => {
       expect(res.body.viewerUrl).toBe(
         `https://record.example.com/v/${res.body.slug}`,
       );
-      expect(db.getRecording(res.body.slug)).not.toBeNull();
+      expect(await recordings.get(res.body.slug)).not.toBeNull();
     } finally {
       cleanup();
     }
@@ -36,7 +36,7 @@ describe('POST /create-upload', () => {
     }
   });
 
-  it('accepts video/webm with codec parameter (e.g. video/webm;codecs=vp9) and round-trips it', async () => {
+  it('accepts video/webm with codec parameter (e.g. video/webm;codecs=vp9) and round-trips it to R2', async () => {
     const seenContentTypes: string[] = [];
     const captureR2: R2 = {
       async mintUploadUrl({ key, contentType }) {
@@ -47,14 +47,12 @@ describe('POST /create-upload', () => {
         return `https://videos.example.com/${key}`;
       },
     };
-    const { app, db, cleanup } = buildTestApp({ r2: captureR2 });
+    const { app, cleanup } = buildTestApp({ r2: captureR2 });
     try {
       const res = await request(app)
         .post('/create-upload')
         .send({ contentType: 'video/webm;codecs=vp9', sizeBytes: 100 });
       expect(res.status).toBe(200);
-      const row = db.getRecording(res.body.slug);
-      expect(row?.mimeType).toBe('video/webm;codecs=vp9');
       expect(seenContentTypes).toEqual(['video/webm;codecs=vp9']);
     } finally {
       cleanup();

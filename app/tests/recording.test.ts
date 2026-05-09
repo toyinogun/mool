@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { openDb } from '../src/db';
 import {
   createRecordings,
   isValidSlug,
   SLUG_LENGTH,
   SlugGenerationExhaustedError,
+  UnsupportedContentTypeError,
 } from '../src/recording';
 import type { R2 } from '../src/r2';
 
@@ -24,9 +24,8 @@ const viewerUrlFor = (slug: string): string => `${PUBLIC_APP_URL}/v/${slug}`;
 
 describe('createRecordings.create', () => {
   it('returns slug, uploadUrl, and viewerUrl', async () => {
-    const db = openDb(':memory:');
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -39,13 +38,12 @@ describe('createRecordings.create', () => {
     expect(result.slug).toMatch(/^[A-Za-z0-9]{6}$/);
     expect(result.uploadUrl).toBe(`https://fake-r2.test/${result.slug}.webm?signed=1`);
     expect(result.viewerUrl).toBe(`${PUBLIC_APP_URL}/v/${result.slug}`);
-    db.close();
+    recordings.close();
   });
 
-  it('persists a row whose r2Key matches `<slug>.webm`', async () => {
-    const db = openDb(':memory:');
+  it("persists the recording so its videoUrl resolves to '<slug>.webm' on the public R2 base", async () => {
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -55,17 +53,14 @@ describe('createRecordings.create', () => {
       sizeBytes: 100,
     });
 
-    const row = db.getRecording(slug);
-    expect(row).toMatchObject({
-      slug,
-      r2Key: `${slug}.webm`,
-      mimeType: 'video/webm',
-    });
-    db.close();
+    const view = await recordings.get(slug);
+    expect(view).not.toBeNull();
+    expect(view!.slug).toBe(slug);
+    expect(view!.videoUrl).toBe(`https://videos.example.com/${slug}.webm`);
+    recordings.close();
   });
 
-  it('passes the caller-provided contentType through to the DB row and to R2', async () => {
-    const db = openDb(':memory:');
+  it('forwards the caller-provided contentType to R2', async () => {
     const seenContentTypes: string[] = [];
     const capturingR2: R2 = {
       async mintUploadUrl({ key, contentType }) {
@@ -77,28 +72,80 @@ describe('createRecordings.create', () => {
       },
     };
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: capturingR2,
       viewerUrl: viewerUrlFor,
     });
 
-    const { slug } = await recordings.create({
+    await recordings.create({
       contentType: 'video/webm;codecs=vp9',
       sizeBytes: 100,
     });
 
-    expect(db.getRecording(slug)?.mimeType).toBe('video/webm;codecs=vp9');
     expect(seenContentTypes).toEqual(['video/webm;codecs=vp9']);
-    db.close();
+    recordings.close();
+  });
+});
+
+describe('createRecordings.create content-type validation', () => {
+  it('rejects a contentType outside ALLOWED_MIME with UnsupportedContentTypeError', async () => {
+    const recordings = createRecordings({
+      dbPath: ':memory:',
+      r2: fakeR2(),
+      viewerUrl: viewerUrlFor,
+    });
+
+    const err = await recordings
+      .create({ contentType: 'video/mp4', sizeBytes: 1 })
+      .then(
+        () => {
+          throw new Error('expected create to reject');
+        },
+        (e) => e,
+      );
+    expect(err).toBeInstanceOf(UnsupportedContentTypeError);
+    expect((err as UnsupportedContentTypeError).contentType).toBe('video/mp4');
+
+    // The row never lands — the seam rejects before insertion.
+    expect(await recordings.get('______')).toBeNull();
+    recordings.close();
   });
 
+  it('accepts video/webm;codecs=vp9 (canonical AllowedMime literal)', async () => {
+    const recordings = createRecordings({
+      dbPath: ':memory:',
+      r2: fakeR2(),
+      viewerUrl: viewerUrlFor,
+    });
+    const result = await recordings.create({
+      contentType: 'video/webm;codecs=vp9',
+      sizeBytes: 1,
+    });
+    expect(result.slug).toMatch(/^[A-Za-z0-9]{6}$/);
+    recordings.close();
+  });
+
+  it('normalizes case and whitespace before validating', async () => {
+    const recordings = createRecordings({
+      dbPath: ':memory:',
+      r2: fakeR2(),
+      viewerUrl: viewerUrlFor,
+    });
+    // Mixed case + a space inside the parameter — should normalize to
+    // 'video/webm;codecs=vp9' and pass.
+    const result = await recordings.create({
+      contentType: 'Video/WebM; codecs=vp9',
+      sizeBytes: 1,
+    });
+    expect(result.slug).toMatch(/^[A-Za-z0-9]{6}$/);
+    recordings.close();
+  });
 });
 
 describe('createRecordings.get', () => {
   it('returns a Promise (locks in pre-v0.4 async shape for presigned-GET migration)', async () => {
-    const db = openDb(':memory:');
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -106,54 +153,47 @@ describe('createRecordings.get', () => {
     const result = recordings.get('zzzzzz');
     expect(result).toBeInstanceOf(Promise);
     expect(await result).toBeNull();
-    db.close();
+    recordings.close();
   });
 
   it('returns the recording with its viewer-side URLs for a known slug', async () => {
-    const db = openDb(':memory:');
-    db.insertRecording({
-      slug: 'abc123',
-      r2Key: 'abc123.webm',
-      mimeType: 'video/webm',
-      createdAt: 1,
-    });
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: fakeR2(),
       viewerUrl: viewerUrlFor,
+      generateSlug: () => 'abc123',
     });
+    await recordings.create({ contentType: 'video/webm', sizeBytes: 1 });
 
     const got = await recordings.get('abc123');
 
     expect(got).not.toBeNull();
     expect(got!.slug).toBe('abc123');
     expect(got!.videoUrl).toBe('https://videos.example.com/abc123.webm');
-    db.close();
+    recordings.close();
   });
 
   it('returns null for an unknown slug', async () => {
-    const db = openDb(':memory:');
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
     expect(await recordings.get('zzzzzz')).toBeNull();
-    db.close();
+    recordings.close();
   });
 
   it('returns null for a malformed slug without touching db', async () => {
-    const db = openDb(':memory:');
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
     expect(await recordings.get('!!')).toBeNull();
     expect(await recordings.get('toolong')).toBeNull();
-    db.close();
+    recordings.close();
   });
 });
 
@@ -178,9 +218,8 @@ describe('isValidSlug', () => {
 
 describe('slug generation (via create)', () => {
   it('produces highly unique slugs over many invocations', async () => {
-    const db = openDb(':memory:');
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -195,7 +234,7 @@ describe('slug generation (via create)', () => {
       seen.add(slug);
     }
     expect(seen.size).toBeGreaterThan(195);
-    db.close();
+    recordings.close();
   });
 });
 
@@ -207,47 +246,39 @@ describe('SLUG_LENGTH', () => {
 
 describe('createRecordings.create slug collision retry', () => {
   it('retries when the generator returns a duplicate slug, then succeeds', async () => {
-    const db = openDb(':memory:');
-    db.insertRecording({
-      slug: 'taken1',
-      r2Key: 'taken1.webm',
-      mimeType: 'video/webm',
-      createdAt: 1,
-    });
-
-    const slugs = ['taken1', 'fresh2'];
+    const slugs = ['taken1', 'taken1', 'fresh2'];
     let i = 0;
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: fakeR2(),
       viewerUrl: viewerUrlFor,
       generateSlug: () => slugs[i++],
     });
 
-    const result = await recordings.create({
+    // First create claims 'taken1'.
+    const first = await recordings.create({
+      contentType: 'video/webm',
+      sizeBytes: 1,
+    });
+    expect(first.slug).toBe('taken1');
+
+    // Second create gets 'taken1' (collision → retry), then 'fresh2'.
+    const second = await recordings.create({
       contentType: 'video/webm',
       sizeBytes: 100,
     });
+    expect(second.slug).toBe('fresh2');
+    expect(i).toBe(3);
 
-    expect(result.slug).toBe('fresh2');
-    expect(i).toBe(2); // generator was called twice
-    expect(db.getRecording('fresh2')).not.toBeNull();
-    expect(db.getRecording('fresh2')!.r2Key).toBe('fresh2.webm');
-    db.close();
+    expect(await recordings.get('taken1')).not.toBeNull();
+    expect(await recordings.get('fresh2')).not.toBeNull();
+    recordings.close();
   });
 
   it('throws after exhausting MAX_SLUG_TRIES (5) collisions', async () => {
-    const db = openDb(':memory:');
-    db.insertRecording({
-      slug: 'always',
-      r2Key: 'always.webm',
-      mimeType: 'video/webm',
-      createdAt: 1,
-    });
-
     let calls = 0;
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: fakeR2(),
       viewerUrl: viewerUrlFor,
       generateSlug: () => {
@@ -255,6 +286,11 @@ describe('createRecordings.create slug collision retry', () => {
         return 'always';
       },
     });
+
+    // Pre-claim the slug, then attempt to create again with every retry colliding.
+    await recordings.create({ contentType: 'video/webm', sizeBytes: 1 });
+    expect(calls).toBe(1);
+    calls = 0;
 
     const err = await recordings
       .create({ contentType: 'video/webm', sizeBytes: 100 })
@@ -268,13 +304,12 @@ describe('createRecordings.create slug collision retry', () => {
     expect((err as SlugGenerationExhaustedError).tries).toBe(5);
     expect((err as SlugGenerationExhaustedError).lastError).toBeDefined();
     expect(calls).toBe(5);
-    db.close();
+    recordings.close();
   });
 });
 
 describe('createRecordings.create orphan-row policy on R2 failure', () => {
   it('propagates the R2 error and leaves the row inserted (orphaned by design)', async () => {
-    const db = openDb(':memory:');
     const failingR2: R2 = {
       async mintUploadUrl() {
         throw new Error('R2 unavailable');
@@ -284,7 +319,7 @@ describe('createRecordings.create orphan-row policy on R2 failure', () => {
       },
     };
     const recordings = createRecordings({
-      db,
+      dbPath: ':memory:',
       r2: failingR2,
       viewerUrl: viewerUrlFor,
       generateSlug: () => 'orph01',
@@ -294,11 +329,14 @@ describe('createRecordings.create orphan-row policy on R2 failure', () => {
       recordings.create({ contentType: 'video/webm', sizeBytes: 100 }),
     ).rejects.toThrow(/R2 unavailable/);
 
-    // Orphan-by-design: the row exists, the R2 object never lands.
-    // See docs/adr/0002. A future sweeper (v0.4) reconciles.
-    const orphan = db.getRecording('orph01');
-    expect(orphan).not.toBeNull();
-    expect(orphan!.r2Key).toBe('orph01.webm');
-    db.close();
+    // Orphan-by-design: the row exists, the R2 object never lands. The
+    // public read path returns a view because the row is present, even
+    // though the R2 object is missing. See docs/adr/0002. A future
+    // sweeper (v0.4) reconciles.
+    const view = await recordings.get('orph01');
+    expect(view).not.toBeNull();
+    expect(view!.slug).toBe('orph01');
+    expect(view!.videoUrl).toBe('https://videos.example.com/orph01.webm');
+    recordings.close();
   });
 });
