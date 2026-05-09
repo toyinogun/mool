@@ -27,8 +27,6 @@ export type CreatedRecording = CreateUploadResponse;
 export interface RecordingView {
   slug: string;
   videoUrl: string;
-  mimeType: string;
-  createdAt: number;
 }
 
 export interface Recordings {
@@ -108,8 +106,6 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
       return {
         slug: row.slug,
         videoUrl: deps.r2.publicUrl(row.r2Key),
-        mimeType: row.mimeType,
-        createdAt: row.createdAt,
       };
     },
   };
