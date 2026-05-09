@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { createViewerPage } from '../src/viewerPage';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { createViewerPage, ViewerTemplateInvalidError } from '../src/viewerPage';
 
 describe('createViewerPage.renderViewerPage', () => {
   it('substitutes {{PLAYBACK_URL}} with the supplied playbackUrl', () => {
@@ -33,15 +35,52 @@ describe('createViewerPage.renderViewerPage', () => {
     );
   });
 
-  it('leaves no {{IDENT}} markers in the output for the v0.1 template shape', () => {
-    // Catches the silent-typo hazard the day a second placeholder lands in
-    // viewer.html: if the rendering forgets to substitute it, the residue
-    // check fires here instead of shipping a literal '{{TITLE}}' to users.
-    const { renderViewerPage } = createViewerPage({
-      template:
-        '<!doctype html><html><body><video src="{{PLAYBACK_URL}}"></video></body></html>',
-    });
-    const html = renderViewerPage({ playbackUrl: 'https://r2.example.com/x.webm' });
-    expect(html).not.toMatch(/\{\{[A-Z_]+\}\}/);
+});
+
+describe('createViewerPage template validation (ADR-0016)', () => {
+  it('throws ViewerTemplateInvalidError when a required slot is missing', () => {
+    expect(() =>
+      createViewerPage({
+        template: '<!doctype html><html><body><video></video></body></html>',
+      }),
+    ).toThrow(ViewerTemplateInvalidError);
+  });
+
+  it('reports the missing slot name on the error', () => {
+    let err: unknown;
+    try {
+      createViewerPage({ template: '<html><body></body></html>' });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ViewerTemplateInvalidError);
+    expect((err as ViewerTemplateInvalidError).missing).toEqual(['PLAYBACK_URL']);
+    expect((err as ViewerTemplateInvalidError).unknown).toEqual([]);
+  });
+
+  it('throws when the template carries an unknown placeholder', () => {
+    // A v0.5 placeholder added to the HTML before the renderer is updated —
+    // boot fails loud instead of shipping a literal '{{TITLE}}' to users.
+    let err: unknown;
+    try {
+      createViewerPage({
+        template: '<video src="{{PLAYBACK_URL}}"></video><h1>{{TITLE}}</h1>',
+      });
+    } catch (e) {
+      err = e;
+    }
+    expect(err).toBeInstanceOf(ViewerTemplateInvalidError);
+    expect((err as ViewerTemplateInvalidError).missing).toEqual([]);
+    expect((err as ViewerTemplateInvalidError).unknown).toEqual(['TITLE']);
+  });
+
+  it('accepts the production app/src/views/viewer.html as a valid template', () => {
+    // Single CI smoke test against the real prod template — without this, the
+    // construction-time validation only fires at server boot, not on PR.
+    const template = readFileSync(
+      path.join(__dirname, '../src/views/viewer.html'),
+      'utf8',
+    );
+    expect(() => createViewerPage({ template })).not.toThrow();
   });
 });

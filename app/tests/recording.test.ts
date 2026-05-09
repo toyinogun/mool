@@ -10,9 +10,6 @@ function fakeR2() {
     async mintUploadUrl({ key }: { key: string; contentType: string; sizeBytes: number }) {
       return `https://fake-r2.test/${key}?signed=1`;
     },
-    publicUrl(key: string) {
-      return `https://videos.example.com/${key}`;
-    },
   };
 }
 
@@ -38,7 +35,7 @@ describe('createRecordings.create', () => {
     recordings.close();
   });
 
-  it("persists the recording so its playbackUrl resolves to '<slug>.webm' on the public R2 base", async () => {
+  it("persists the recording with r2Key '<slug>.webm' so the route can compose its playback URL", async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
       ...fakeR2(),
@@ -50,10 +47,10 @@ describe('createRecordings.create', () => {
       sizeBytes: 100,
     });
 
-    const view = await recordings.get(slug);
-    expect(view).not.toBeNull();
-    expect(view!.slug).toBe(slug);
-    expect(view!.playbackUrl).toBe(`https://videos.example.com/${slug}.webm`);
+    const recording = await recordings.get(slug);
+    expect(recording).not.toBeNull();
+    expect(recording!.slug).toBe(slug);
+    expect(recording!.r2Key).toBe(`${slug}.webm`);
     recordings.close();
   });
 
@@ -162,20 +159,25 @@ describe('createRecordings.get', () => {
     recordings.close();
   });
 
-  it('returns the recording with its viewer-side URLs for a known slug', async () => {
+  it('returns the stored Recording fields for a known slug', async () => {
     const recordings = createRecordings({
       dbPath: ':memory:',
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
       generateSlug: () => 'abc123',
     });
-    await recordings.create({ contentType: 'video/webm', sizeBytes: 1 });
+    await recordings.create({
+      contentType: 'video/webm;codecs=vp9',
+      sizeBytes: 1,
+    });
 
     const got = await recordings.get('abc123');
 
     expect(got).not.toBeNull();
     expect(got!.slug).toBe('abc123');
-    expect(got!.playbackUrl).toBe('https://videos.example.com/abc123.webm');
+    expect(got!.r2Key).toBe('abc123.webm');
+    expect(got!.mimeType).toBe('video/webm;codecs=vp9');
+    expect(typeof got!.createdAt).toBe('number');
     recordings.close();
   });
 
@@ -315,13 +317,13 @@ describe('createRecordings.create orphan-row policy on R2 failure', () => {
     expect((err as UploadMintFailedError).cause).toBe(r2Cause);
 
     // Orphan-by-design: the row exists, the R2 object never lands. The
-    // public read path returns a view because the row is present, even
-    // though the R2 object is missing. See docs/adr/0002, docs/adr/0009.
+    // public read path returns the Recording because the row is present,
+    // even though the R2 object is missing. See docs/adr/0002, docs/adr/0009.
     // A future sweeper (v0.4) reconciles.
-    const view = await recordings.get('orph01');
-    expect(view).not.toBeNull();
-    expect(view!.slug).toBe('orph01');
-    expect(view!.playbackUrl).toBe('https://videos.example.com/orph01.webm');
+    const recording = await recordings.get('orph01');
+    expect(recording).not.toBeNull();
+    expect(recording!.slug).toBe('orph01');
+    expect(recording!.r2Key).toBe('orph01.webm');
     recordings.close();
   });
 });

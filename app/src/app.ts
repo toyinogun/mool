@@ -26,6 +26,8 @@ export interface AppDeps {
   recordings: Recordings;
   maxUploadBytes: number;
   renderViewerPage: (inputs: { playbackUrl: string }) => string;
+  /** Builds the public URL where R2 serves a stored object's bytes. See ADR-0015. */
+  publicUrl: (key: string) => string;
   /** Absolute path to the static-assets directory, or null in tests. */
   publicDir: string | null;
 }
@@ -41,6 +43,7 @@ export function createApp(deps: AppDeps): Express {
   app.get(VIEWER_ROUTE, asyncRoute(viewerRoute({
     recordings: deps.recordings,
     renderViewerPage: deps.renderViewerPage,
+    publicUrl: deps.publicUrl,
   })));
   app.post('/create-upload', asyncRoute(createUploadRoute({
     recordings: deps.recordings,
