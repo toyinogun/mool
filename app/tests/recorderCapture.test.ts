@@ -5,12 +5,18 @@ import { createCapture, pickMimeType } from '../src/public/recorderCapture.js';
 
 // --- test doubles ----------------------------------------------------------
 
-type FakeTrack = { kind: 'video' | 'audio'; _stopped: boolean; stop(): void };
+type FakeTrack = {
+  kind: 'video' | 'audio';
+  _stopped: boolean;
+  onended: (() => void) | null;
+  stop(): void;
+};
 
 function makeTrack(kind: 'video' | 'audio'): FakeTrack {
   return {
     kind,
     _stopped: false,
+    onended: null,
     stop() {
       this._stopped = true;
     },
@@ -373,6 +379,56 @@ describe('createCapture lifecycle', () => {
     await capture.requestUser(); // remembers audioStream
     capture.start(screenStream as unknown as MediaStream); // no explicit audioStream arg
     expect(FakeMediaRecorder.instances[0].options.mimeType).toBe('video/webm;codecs=vp9,opus');
+  });
+
+  it('start wires onTrackEnded against every screen-stream track', () => {
+    const onTrackEnded = vi.fn();
+    const videoTrack = makeTrack('video');
+    const screenStream = makeStream([videoTrack]);
+    const capture = createCapture({
+      navigator: {},
+      MediaRecorderCtor: FakeMediaRecorder as unknown as typeof MediaRecorder,
+      pickMimeType: () => 'video/webm',
+    });
+    capture.start(screenStream as unknown as MediaStream, undefined, onTrackEnded);
+    expect(videoTrack.onended).toBeTypeOf('function');
+    videoTrack.onended!();
+    expect(onTrackEnded).toHaveBeenCalledOnce();
+  });
+
+  it('start wires onTrackEnded on merged audio tracks (i.e. AFTER the merge)', () => {
+    // Load-bearing ordering invariant: if onended were wired BEFORE the
+    // merge, audioTrack.onended would still be null after start() — and the
+    // user unplugging their mic mid-recording would not stop the Capture.
+    const onTrackEnded = vi.fn();
+    const audioTrack = makeTrack('audio');
+    const screenStream = makeStream([makeTrack('video')]);
+    const audioStream = makeStream([audioTrack]);
+    const capture = createCapture({
+      navigator: {},
+      MediaRecorderCtor: FakeMediaRecorder as unknown as typeof MediaRecorder,
+      pickMimeType: () => 'video/webm;codecs=vp9,opus',
+    });
+    capture.start(
+      screenStream as unknown as MediaStream,
+      audioStream as unknown as MediaStream,
+      onTrackEnded,
+    );
+    expect(audioTrack.onended).toBeTypeOf('function');
+    audioTrack.onended!();
+    expect(onTrackEnded).toHaveBeenCalledOnce();
+  });
+
+  it('start without an onTrackEnded does not throw and leaves track.onended null', () => {
+    const videoTrack = makeTrack('video');
+    const screenStream = makeStream([videoTrack]);
+    const capture = createCapture({
+      navigator: {},
+      MediaRecorderCtor: FakeMediaRecorder as unknown as typeof MediaRecorder,
+      pickMimeType: () => 'video/webm',
+    });
+    capture.start(screenStream as unknown as MediaStream);
+    expect(videoTrack.onended).toBeNull();
   });
 
   it('stop resolves with chunks→Blob carrying the PINNED mimeType, not the browser-normalised one', async () => {
