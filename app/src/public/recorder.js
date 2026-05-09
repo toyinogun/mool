@@ -199,9 +199,12 @@ function startRecording(stream, audioStream) {
     if (e.data && e.data.size > 0) chunks.push(e.data);
   };
   mediaRecorder.onstop = () => {
-    const finalMime = mediaRecorder ? mediaRecorder.mimeType : mimeType;
-    const blob = new Blob(chunks, { type: finalMime });
-    dispatch({ type: 'RecorderStopped', blob, mimeType: finalMime });
+    // Use the mime type we passed to the MediaRecorder constructor — that's
+    // what's pinned in ALLOWED_MIME server-side. The browser's
+    // mediaRecorder.mimeType may normalize codec ordering or add quoting,
+    // and the server's allow-list does exact-string comparison.
+    const blob = new Blob(chunks, { type: mimeType });
+    dispatch({ type: 'RecorderStopped', blob, mimeType });
   };
   // Either track ending (screen or mic) flows through Stopping.
   // TrackEnded outside Capturing is a no-op (see recorderFlow.js).
