@@ -3,7 +3,7 @@ import type { Recordings, RecordingView } from '../recording';
 
 export interface ViewerDeps {
   recordings: Recordings;
-  viewerTemplate: string;
+  renderViewerPage: (inputs: { playbackUrl: string }) => string;
 }
 
 export function viewerRoute(deps: ViewerDeps) {
@@ -24,12 +24,7 @@ export function viewerRoute(deps: ViewerDeps) {
       res.status(404).type('text/plain').send('Not found');
       return;
     }
-    // Bind to a const so the replacer closure (below) doesn't see `view`
-    // widened back to `RecordingView | null`.
-    const { playbackUrl } = view;
-    // Replacer function avoids $-interpretation in the replacement string,
-    // so URLs containing $ characters substitute literally.
-    const html = deps.viewerTemplate.replace(/\{\{PLAYBACK_URL\}\}/g, () => playbackUrl);
+    const html = deps.renderViewerPage({ playbackUrl: view.playbackUrl });
     res.set('Content-Type', 'text/html; charset=utf-8').send(html);
   };
 }

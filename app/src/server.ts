@@ -4,6 +4,7 @@ import { loadConfig } from './config';
 import { createR2 } from './r2';
 import { createRecordings } from './recording';
 import { createUrls } from './urls';
+import { createViewerPage } from './viewerPage';
 import { createApp } from './app';
 
 const config = loadConfig();
@@ -15,16 +16,18 @@ const recordings = createRecordings({
   publicUrl: r2.publicUrl,
   viewerUrl: urls.viewerUrl,
 });
-const viewerTemplate = readFileSync(
-  path.join(__dirname, 'views', 'viewer.html'),
-  'utf8',
-);
+const { renderViewerPage } = createViewerPage({
+  template: readFileSync(
+    path.join(__dirname, 'views', 'viewer.html'),
+    'utf8',
+  ),
+});
 const publicDir = path.join(__dirname, 'public');
 
 const app = createApp({
   recordings,
   maxUploadBytes: config.maxUploadBytes,
-  viewerTemplate,
+  renderViewerPage,
   publicDir,
 });
 

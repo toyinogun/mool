@@ -3,16 +3,19 @@
  * machine (`recorderFlow.js`) and executes the effects the SM emits.
  *
  * This file is the only place that touches the DOM, `MediaRecorder`,
- * `fetch`, `setInterval`, or `navigator.clipboard`. The flow logic lives
- * in `recorderFlow.js` and is unit-tested in `tests/recorderFlow.test.ts`.
+ * `setInterval`, or `navigator.clipboard`. The HTTP layer (mintUpload /
+ * putBytes against /create-upload and R2) lives in `recorderUpload.js`
+ * and is tested independently against a fake fetch.
  *
  * @typedef {import('./recorderFlow.js').State} State
  * @typedef {import('./recorderFlow.js').Event} FlowEvent
  * @typedef {import('./recorderFlow.js').Effect} Effect
- * @typedef {import('../routes/createUpload').CreateUploadResponse} CreateUploadResponse
- * @typedef {import('../routes/createUpload').CreateUploadErrorResponse} CreateUploadErrorResponse
  */
 import { initialState, transition } from './recorderFlow.js';
+import {
+  mintUpload as mintUploadRequest,
+  putBytes as putBytesRequest,
+} from './recorderUpload.js';
 
 const startBtn = document.getElementById('start');
 const stopBtn = document.getElementById('stop');
@@ -157,41 +160,17 @@ function startRecording(stream) {
  * @param {number} sizeBytes
  */
 async function mintUpload(mimeType, sizeBytes) {
-  let res;
-  try {
-    res = await fetch('/create-upload', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contentType: mimeType, sizeBytes }),
-    });
-  } catch {
-    dispatch({ type: 'CreateFailed', reason: 'could not reach server' });
-    return;
-  }
-  let body;
-  try {
-    body = await res.json();
-  } catch {
-    dispatch({ type: 'CreateFailed', reason: 'unreadable response' });
-    return;
-  }
-  if (!res.ok) {
-    /** @type {CreateUploadErrorResponse} */
-    const errBody = body;
+  const r = await mintUploadRequest({ fetch, mimeType, sizeBytes });
+  if (r.kind === 'ok') {
     dispatch({
-      type: 'CreateFailed',
-      reason: errBody.error ?? String(res.status),
+      type: 'CreateOk',
+      slug: r.slug,
+      uploadUrl: r.uploadUrl,
+      viewerUrl: r.viewerUrl,
     });
-    return;
+  } else {
+    dispatch({ type: 'CreateFailed', reason: r.reason });
   }
-  /** @type {CreateUploadResponse} */
-  const ok = body;
-  dispatch({
-    type: 'CreateOk',
-    slug: ok.slug,
-    uploadUrl: ok.uploadUrl,
-    viewerUrl: ok.viewerUrl,
-  });
 }
 
 /**
@@ -200,25 +179,12 @@ async function mintUpload(mimeType, sizeBytes) {
  * @param {string} mimeType
  */
 async function putBytes(uploadUrl, blob, mimeType) {
-  let res;
-  try {
-    res = await fetch(uploadUrl, {
-      method: 'PUT',
-      headers: { 'Content-Type': mimeType },
-      body: blob,
-    });
-  } catch {
-    dispatch({ type: 'PutFailed', reason: 'Upload failed during transfer.' });
-    return;
+  const r = await putBytesRequest({ fetch, uploadUrl, blob, mimeType });
+  if (r.kind === 'ok') {
+    dispatch({ type: 'PutOk' });
+  } else {
+    dispatch({ type: 'PutFailed', reason: r.reason });
   }
-  if (!res.ok) {
-    dispatch({
-      type: 'PutFailed',
-      reason: `Upload to storage failed: HTTP ${res.status}`,
-    });
-    return;
-  }
-  dispatch({ type: 'PutOk' });
 }
 
 /** @param {string} text */
