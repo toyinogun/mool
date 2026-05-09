@@ -5,8 +5,12 @@ A self-hosted, browser-based screen recorder. Captures the screen in the browser
 ## Language
 
 **Recording**:
-A captured screen video, identified by a unique slug. Has two physical manifestations — a row in SQLite (metadata) and an object in R2 (bytes) — but is one conceptual thing.
-_Avoid_: video, clip, capture, asset
+A captured screen video, identified by a unique slug. Has two physical manifestations — a row in SQLite (metadata) and an object in R2 (bytes) — but is one conceptual thing. A Recording exists once both manifestations are persisted; the in-browser state before that is a **Capture**.
+_Avoid_: video, clip, asset
+
+**Capture**:
+The in-browser, pre-upload state of a recording-in-progress: the active `MediaStream`(s), the `MediaRecorder`, and the accumulated chunks. A Capture becomes a Recording when its bytes are uploaded and its row is written. Owned by the Recorder page's `recorderCapture` module; the Recording module never sees one.
+_Avoid_: stream, session, draft
 
 **Slug**:
 The 6-character base62 identifier (`[A-Za-z0-9]{6}`) that names a Recording in URLs. Generated server-side, unique by construction.

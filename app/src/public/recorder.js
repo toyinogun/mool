@@ -2,10 +2,12 @@
  * Adapter for the Recorder page. Wires DOM events into the pure state
  * machine (`recorderFlow.js`) and executes the effects the SM emits.
  *
- * This file is the only place that touches the DOM, `MediaRecorder`,
- * `setInterval`, or `navigator.clipboard`. The HTTP layer (mintUpload /
- * putBytes against /create-upload and R2) lives in `recorderUpload.js`
- * and is tested independently against a fake fetch.
+ * The capture lifecycle (MediaRecorder, MediaStream cleanup, chunks→Blob,
+ * the getDisplayMedia/getUserMedia error normalisation) lives in
+ * `recorderCapture.js` (ADR-0009 sibling extraction). The HTTP layer
+ * (mintUpload / putBytes) lives in `recorderUpload.js` (ADR-0007). This
+ * file is the only place that touches the DOM, the timer interval, or
+ * `navigator.clipboard`.
  *
  * @typedef {import('./recorderFlow.js').State} State
  * @typedef {import('./recorderFlow.js').Event} FlowEvent
@@ -16,6 +18,7 @@ import {
   mintUpload as mintUploadRequest,
   putBytes as putBytesRequest,
 } from './recorderUpload.js';
+import { createCapture } from './recorderCapture.js';
 
 const startBtn = document.getElementById('start');
 const stopBtn = document.getElementById('stop');
@@ -29,14 +32,11 @@ const micToggleEl = document.getElementById('mic-enabled');
 /** @type {State} */
 let state = initialState();
 
-/** @type {MediaRecorder | null} */
-let mediaRecorder = null;
-/** @type {MediaStream | null} */
-let activeStream = null;
-/** @type {MediaStream | null} */
-let activeAudioStream = null;
-/** @type {Blob[]} */
-let chunks = [];
+const capture = createCapture({
+  navigator,
+  MediaRecorderCtor: MediaRecorder,
+});
+
 /** @type {ReturnType<typeof setInterval> | null} */
 let timerInterval = null;
 let timerStartedAt = 0;
@@ -54,33 +54,19 @@ function dispatch(event) {
 function runEffect(eff) {
   switch (eff.type) {
     case 'requestDisplayMedia':
-      requestDisplayMedia();
+      requestDisplay();
       return;
     case 'requestUserMedia':
-      requestUserMedia();
+      requestUser();
       return;
     case 'startRecording':
-      startRecording(eff.stream, eff.audioStream);
+      startCapture(eff.stream, eff.audioStream);
       return;
     case 'stopRecording':
-      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
-      }
+      stopCapture();
       return;
     case 'releaseStream':
-      // After startRecording, the merged audio track is reachable via both
-      // activeStream.getTracks() and activeAudioStream.getTracks(). Stopping
-      // an already-ended MediaStreamTrack is a spec-defined no-op, so the
-      // double-stop here is harmless. Keep this assumption in mind if the
-      // .stop() call is ever replaced with something side-effectful.
-      if (activeStream) {
-        activeStream.getTracks().forEach((t) => t.stop());
-        activeStream = null;
-      }
-      if (activeAudioStream) {
-        activeAudioStream.getTracks().forEach((t) => t.stop());
-        activeAudioStream = null;
-      }
+      capture.release();
       return;
     case 'mintUpload':
       mintUpload(eff.mimeType, eff.sizeBytes);
@@ -124,116 +110,41 @@ function runEffect(eff) {
   }
 }
 
-async function requestDisplayMedia() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-    dispatch({
-      type: 'DisplayMediaFailed',
-      reason:
-        'getDisplayMedia is unavailable. The page must be served over https or http://localhost — check your URL.',
-    });
-    return;
+async function requestDisplay() {
+  const r = await capture.requestDisplay();
+  if (r.kind === 'ok') {
+    dispatch({ type: 'DisplayMediaGranted', stream: r.stream });
+  } else {
+    dispatch({ type: 'DisplayMediaFailed', reason: r.reason });
   }
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: 30 },
-      audio: false,
-    });
-  } catch (err) {
-    const name = err && err.name ? err.name : 'Error';
-    const message = err && err.message ? err.message : String(err);
-    dispatch({ type: 'DisplayMediaFailed', reason: `${name} — ${message}` });
-    return;
-  }
-  dispatch({ type: 'DisplayMediaGranted', stream });
 }
 
-async function requestUserMedia() {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    dispatch({
-      type: 'UserMediaFailed',
-      reason:
-        'Microphone API unavailable. The page must be served over https or http://localhost — check your URL.',
-    });
-    return;
+async function requestUser() {
+  const r = await capture.requestUser();
+  if (r.kind === 'ok') {
+    dispatch({ type: 'UserMediaGranted', stream: r.stream });
+  } else {
+    dispatch({ type: 'UserMediaFailed', reason: r.reason });
   }
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  } catch (err) {
-    const name = err && err.name ? err.name : 'Error';
-    let message;
-    if (name === 'NotFoundError') {
-      message = 'No microphone found. Turn off the mic toggle to record silently.';
-    } else if (name === 'NotAllowedError' || name === 'SecurityError') {
-      message =
-        'Microphone access denied. Allow it in your browser, or turn off the mic toggle to record silently.';
-    } else {
-      const detail = err && err.message ? err.message : String(err);
-      message = `Microphone error: ${name} — ${detail}`;
-    }
-    dispatch({ type: 'UserMediaFailed', reason: message });
-    return;
-  }
-  // Hold the stream in adapter state so releaseStream can clean it up
-  // even if the screen-share prompt is denied (no startRecording yet).
-  activeAudioStream = stream;
-  dispatch({ type: 'UserMediaGranted', stream });
 }
 
 /**
  * @param {MediaStream} stream
  * @param {MediaStream | undefined} audioStream
  */
-function startRecording(stream, audioStream) {
-  activeStream = stream;
-  activeAudioStream = audioStream ?? null;
-
-  // Merge mic audio into the screen stream so a single MediaRecorder
-  // produces one container with both video and audio tracks.
-  if (audioStream) {
-    for (const track of audioStream.getAudioTracks()) {
-      stream.addTrack(track);
-    }
-  }
-
-  chunks = [];
-  const mimeType = pickMimeType(Boolean(audioStream));
-  mediaRecorder = new MediaRecorder(stream, { mimeType });
-  mediaRecorder.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) chunks.push(e.data);
-  };
-  mediaRecorder.onstop = () => {
-    // Use the mime type we passed to the MediaRecorder constructor — that's
-    // what's pinned in ALLOWED_MIME server-side. The browser's
-    // mediaRecorder.mimeType may normalize codec ordering or add quoting,
-    // and the server's allow-list does exact-string comparison.
-    const blob = new Blob(chunks, { type: mimeType });
-    dispatch({ type: 'RecorderStopped', blob, mimeType });
-  };
+function startCapture(stream, audioStream) {
+  capture.start(stream, audioStream);
   // Either track ending (screen or mic) flows through Stopping.
   // TrackEnded outside Capturing is a no-op (see recorderFlow.js).
+  // Iterate AFTER start() so the merged audio tracks are included.
   for (const track of stream.getTracks()) {
     track.onended = () => dispatch({ type: 'TrackEnded' });
   }
-  mediaRecorder.start();
 }
 
-/** @param {boolean} hasAudio */
-function pickMimeType(hasAudio) {
-  if (hasAudio) {
-    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
-      return 'video/webm;codecs=vp9,opus';
-    }
-    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
-      return 'video/webm;codecs=vp8,opus';
-    }
-    return 'video/webm';
-  }
-  if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
-    return 'video/webm;codecs=vp9';
-  }
-  return 'video/webm';
+async function stopCapture() {
+  const { blob, mimeType } = await capture.stop();
+  dispatch({ type: 'RecorderStopped', blob, mimeType });
 }
 
 /**
