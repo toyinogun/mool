@@ -23,7 +23,14 @@ function formatElapsed(ms) {
   return `${mm}:${ss}`;
 }
 
+function clearSessionState() {
+  mediaRecorder = null;
+  stream = null;
+  chunks = [];
+}
+
 function resetUiAfterFailure() {
+  clearSessionState();
   startBtn.disabled = false;
   stopBtn.disabled = true;
   clearInterval(timerInterval);
@@ -52,7 +59,15 @@ async function start() {
   mediaRecorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) chunks.push(e.data);
   };
-  mediaRecorder.onstop = onRecordingStopped;
+  // Wrap so any rejection in the async onstop flow surfaces in the UI
+  // instead of being silently swallowed by the browser's event dispatch.
+  mediaRecorder.onstop = () => {
+    onRecordingStopped().catch((err) => {
+      console.error('onRecordingStopped failed:', err);
+      setStatus('Unexpected error — please try again.');
+      resetUiAfterFailure();
+    });
+  };
 
   // If the user clicks the browser's native "Stop sharing" UI,
   // end the recorder gracefully.
@@ -88,6 +103,11 @@ async function onRecordingStopped() {
   }
 
   const blob = new Blob(chunks, { type: 'video/webm' });
+  if (blob.size === 0) {
+    setStatus('Recording was empty — nothing to upload.');
+    resetUiAfterFailure();
+    return;
+  }
 
   let createRes;
   try {
@@ -102,14 +122,22 @@ async function onRecordingStopped() {
     return;
   }
 
-  if (!createRes.ok) {
-    const errBody = await createRes.json().catch(() => ({}));
-    setStatus(`Upload rejected: ${errBody.error ?? createRes.status}`);
+  let createBody;
+  try {
+    createBody = await createRes.json();
+  } catch {
+    setStatus('Server returned an unreadable response.');
     resetUiAfterFailure();
     return;
   }
 
-  const { uploadUrl, viewerUrl } = await createRes.json();
+  if (!createRes.ok) {
+    setStatus(`Upload rejected: ${createBody.error ?? createRes.status}`);
+    resetUiAfterFailure();
+    return;
+  }
+
+  const { uploadUrl, viewerUrl } = createBody;
 
   let putRes;
   try {
@@ -133,6 +161,7 @@ async function onRecordingStopped() {
   linkEl.href = viewerUrl;
   linkEl.textContent = viewerUrl;
   resultEl.hidden = false;
+  clearSessionState();
   startBtn.disabled = false;
 }
 
