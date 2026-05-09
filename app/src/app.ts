@@ -7,6 +7,7 @@ import express, {
 } from 'express';
 import type { DB } from './db';
 import type { R2 } from './r2';
+import { createUploadRoute } from './routes/createUpload';
 
 type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
 
@@ -38,7 +39,7 @@ export function createApp(deps: AppDeps): Express {
     res.json({ ok: true });
   });
 
-  // Routes added in later tasks will be wired in here.
+  app.post('/create-upload', asyncRoute(createUploadRoute(deps)));
 
   if (deps.publicDir) {
     app.use(express.static(deps.publicDir));
