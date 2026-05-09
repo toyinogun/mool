@@ -99,9 +99,16 @@ export interface CreatedRecording {
   viewerUrl: string;
 }
 
-export interface RecordingView {
+/**
+ * The conceptual entity from CONTEXT.md — a Recording's row + R2-object pair,
+ * surfaced as the public read shape. Routes project this to wire shapes
+ * (e.g. the Viewer page's renderer input) — see ADR-0015.
+ */
+export interface Recording {
   slug: string;
-  playbackUrl: string;
+  r2Key: string;
+  mimeType: string;
+  createdAt: number;
 }
 
 export interface Recordings {
@@ -117,7 +124,7 @@ export interface Recordings {
    *   The orphaned slug is recoverable from the error.
    */
   create(args: CreateRecordingArgs): Promise<CreatedRecording>;
-  get(slug: string): Promise<RecordingView | null>;
+  get(slug: string): Promise<Recording | null>;
   close(): void;
 }
 
@@ -130,8 +137,6 @@ export interface RecordingsDeps {
     contentType: string;
     sizeBytes: number;
   }) => Promise<string>;
-  /** Builds the public URL where R2 serves a stored object's bytes. */
-  publicUrl: (key: string) => string;
   /** Builds the absolute Viewer URL for a Recording. Owned by `urls.ts` — see docs/adr/0003. */
   viewerUrl: (slug: string) => string;
   /** Optional override for tests — defaults to the real CSPRNG-backed generator. */
@@ -234,12 +239,7 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
 
     async get(slug) {
       if (!isValidSlug(slug)) return null;
-      const row = getRow(slug);
-      if (!row) return null;
-      return {
-        slug: row.slug,
-        playbackUrl: deps.publicUrl(row.r2Key),
-      };
+      return getRow(slug);
     },
 
     close() {

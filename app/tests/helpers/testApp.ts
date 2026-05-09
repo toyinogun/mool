@@ -1,4 +1,4 @@
-import { compose } from '../../src/compose';
+import { compose, type ComposeLeaves } from '../../src/compose';
 import type { Recordings, RecordingsDeps } from '../../src/recording';
 import type { Express } from 'express';
 
@@ -21,7 +21,7 @@ export interface BuildTestAppOpts {
   /** Override the upload-URL minter — useful for capturing or simulating R2 failure. */
   mintUploadUrl?: RecordingsDeps['mintUploadUrl'];
   /** Override the public-URL composer — rarely needed; default mirrors prod shape. */
-  publicUrl?: RecordingsDeps['publicUrl'];
+  publicUrl?: ComposeLeaves['publicUrl'];
   /** Override the slug generator — useful when a test needs a known slug. */
   generateSlug?: () => string;
 }

@@ -27,8 +27,8 @@ export interface ComposeLeaves {
   publicAppUrl: string;
   /** R2 minter — production passes the real SDK call; tests pass a fake. */
   mintUploadUrl: RecordingsDeps['mintUploadUrl'];
-  /** R2 public-URL composer — production passes the real custom-domain builder; tests pass a fake. */
-  publicUrl: RecordingsDeps['publicUrl'];
+  /** R2 public-URL composer — consumed by the Viewer route per ADR-0015. */
+  publicUrl: (key: string) => string;
   /** Hard limit on Upload sizes accepted by `/create-upload`. */
   maxUploadBytes: number;
   /** Absolute path to the static-assets directory in production; `null` in tests. */
@@ -42,7 +42,6 @@ export function compose(leaves: ComposeLeaves): { app: Express; recordings: Reco
   const recordings = createRecordings({
     dbPath: leaves.dbPath,
     mintUploadUrl: leaves.mintUploadUrl,
-    publicUrl: leaves.publicUrl,
     viewerUrl: urls.viewerUrl,
     generateSlug: leaves.generateSlug,
   });
@@ -51,6 +50,7 @@ export function compose(leaves: ComposeLeaves): { app: Express; recordings: Reco
     recordings,
     maxUploadBytes: leaves.maxUploadBytes,
     renderViewerPage,
+    publicUrl: leaves.publicUrl,
     publicDir: leaves.publicDir,
   });
   return { app, recordings };

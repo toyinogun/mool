@@ -5,6 +5,8 @@ import type {
   CreateUploadErrorCode,
 } from '../src/routes/createUpload';
 import { ALLOWED_MIME, type AllowedMime } from '../src/recording';
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore — JSDoc-typed JS module shipped to the browser as well.
 import { pickMimeType } from '../src/public/recorderCapture.js';
 import { buildTestApp } from './helpers/testApp';
 
