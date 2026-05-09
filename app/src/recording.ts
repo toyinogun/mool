@@ -69,7 +69,7 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
           deps.db.insertRecording({
             slug,
             r2Key,
-            mimeType: 'video/webm',
+            mimeType: contentType,
             createdAt: Date.now(),
           });
         } catch (err) {

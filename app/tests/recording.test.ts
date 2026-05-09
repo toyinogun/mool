@@ -58,6 +58,34 @@ describe('createRecordings.create', () => {
     db.close();
   });
 
+  it('passes the caller-provided contentType through to the DB row and to R2', async () => {
+    const db = openDb(':memory:');
+    const seenContentTypes: string[] = [];
+    const capturingR2: R2 = {
+      async mintUploadUrl({ key, contentType }) {
+        seenContentTypes.push(contentType);
+        return `https://fake-r2.test/${key}?signed=1`;
+      },
+      publicUrl(key) {
+        return `https://videos.example.com/${key}`;
+      },
+    };
+    const recordings = createRecordings({
+      db,
+      r2: capturingR2,
+      publicAppUrl: PUBLIC_APP_URL,
+    });
+
+    const { slug } = await recordings.create({
+      contentType: 'video/webm;codecs=vp9',
+      sizeBytes: 100,
+    });
+
+    expect(db.getRecording(slug)?.mimeType).toBe('video/webm;codecs=vp9');
+    expect(seenContentTypes).toEqual(['video/webm;codecs=vp9']);
+    db.close();
+  });
+
   it('strips a trailing slash from publicAppUrl when building viewerUrl', async () => {
     const db = openDb(':memory:');
     const recordings = createRecordings({

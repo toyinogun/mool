@@ -44,7 +44,7 @@ export function createUploadRoute(deps: CreateUploadDeps) {
     }
 
     const created: CreateUploadResponse = await deps.recordings.create({
-      contentType: 'video/webm',
+      contentType: ct,
       sizeBytes,
     });
     res.json(created);
