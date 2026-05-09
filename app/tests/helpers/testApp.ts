@@ -1,7 +1,5 @@
-import { createApp } from '../../src/app';
-import { createRecordings, type Recordings, type RecordingsDeps } from '../../src/recording';
-import { createUrls } from '../../src/urls';
-import { createViewerPage } from '../../src/viewerPage';
+import { compose } from '../../src/compose';
+import type { Recordings, RecordingsDeps } from '../../src/recording';
 import type { Express } from 'express';
 
 export function fakeR2() {
@@ -33,21 +31,16 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
   recordings: Recordings;
   cleanup: () => void;
 } {
-  const urls = createUrls({ publicAppUrl: 'https://record.example.com' });
   const defaults = fakeR2();
-  const recordings = createRecordings({
+  const { app, recordings } = compose({
     dbPath: ':memory:',
+    template: VIEWER_TEMPLATE_STUB,
+    publicAppUrl: 'https://record.example.com',
     mintUploadUrl: opts.mintUploadUrl ?? defaults.mintUploadUrl,
     publicUrl: opts.publicUrl ?? defaults.publicUrl,
-    viewerUrl: urls.viewerUrl,
-    generateSlug: opts.generateSlug,
-  });
-  const { renderViewerPage } = createViewerPage({ template: VIEWER_TEMPLATE_STUB });
-  const app = createApp({
-    recordings,
     maxUploadBytes: opts.maxUploadBytes ?? 500 * 1024 * 1024,
-    renderViewerPage,
     publicDir: null,
+    generateSlug: opts.generateSlug,
   });
   return { app, recordings, cleanup: () => recordings.close() };
 }
