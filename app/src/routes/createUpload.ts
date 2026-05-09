@@ -19,8 +19,8 @@ export function createUploadRoute(deps: CreateUploadDeps) {
     const body = req.body ?? {};
     const ct = normalizeMime(body.contentType);
     if (!ALLOWED_MIME.has(ct)) {
-      const body: CreateUploadErrorResponse = { error: 'invalid_content_type' };
-      res.status(400).json(body);
+      const errBody: CreateUploadErrorResponse = { error: 'invalid_content_type' };
+      res.status(400).json(errBody);
       return;
     }
 
@@ -30,16 +30,16 @@ export function createUploadRoute(deps: CreateUploadDeps) {
       !Number.isInteger(sizeBytes) ||
       sizeBytes <= 0
     ) {
-      const body: CreateUploadErrorResponse = { error: 'invalid_size_bytes' };
-      res.status(400).json(body);
+      const errBody: CreateUploadErrorResponse = { error: 'invalid_size_bytes' };
+      res.status(400).json(errBody);
       return;
     }
     if (sizeBytes > deps.maxUploadBytes) {
-      const body: CreateUploadErrorResponse = {
+      const errBody: CreateUploadErrorResponse = {
         error: 'file_too_large',
         maxBytes: deps.maxUploadBytes,
       };
-      res.status(413).json(body);
+      res.status(413).json(errBody);
       return;
     }
 

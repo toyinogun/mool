@@ -17,6 +17,11 @@ export interface CreateRecordingArgs {
   sizeBytes: number;
 }
 
+/**
+ * Deliberately aliased: the module's create-result IS the wire body today.
+ * If a caller ever needs more than the wire ships (e.g. `createdAt` for an
+ * authenticated dashboard), split this alias and have the route project.
+ */
 export type CreatedRecording = CreateUploadResponse;
 
 export interface RecordingView {

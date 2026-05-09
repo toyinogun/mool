@@ -55,8 +55,8 @@ export function createApp(deps: AppDeps): Express {
     (err: unknown, _req: Request, res: Response, _next: NextFunction) => {
       console.error(err);
       if (res.headersSent) return;
-      const body: CreateUploadErrorResponse = { error: 'internal_server_error' };
-      res.status(500).json(body);
+      const errBody: CreateUploadErrorResponse = { error: 'internal_server_error' };
+      res.status(500).json(errBody);
     },
   );
 
