@@ -14,6 +14,8 @@
 /**
  * @typedef {{ kind: 'Idle' }} StateIdle
  * @typedef {{ kind: 'Starting' }} StateStarting
+ * @typedef {{ kind: 'Starting', audioStream: MediaStream }} StateStartingWithAudio
+ * @typedef {{ kind: 'RequestingMic' }} StateRequestingMic
  * @typedef {{ kind: 'Capturing' }} StateCapturing
  * @typedef {{ kind: 'Stopping' }} StateStopping
  * @typedef {{ kind: 'MintingUrl', blob: Blob, mimeType: string }} StateMintingUrl
@@ -21,15 +23,18 @@
  * @typedef {{ kind: 'Done', viewerUrl: string }} StateDone
  * @typedef {{ kind: 'Failed', message: string }} StateFailed
  *
- * @typedef {StateIdle | StateStarting | StateCapturing | StateStopping
- *          | StateMintingUrl | StateUploading | StateDone | StateFailed} State
+ * @typedef {StateIdle | StateStarting | StateStartingWithAudio | StateRequestingMic
+ *          | StateCapturing | StateStopping | StateMintingUrl | StateUploading
+ *          | StateDone | StateFailed} State
  */
 
 /**
- * @typedef {{ type: 'StartClicked' }} EventStartClicked
+ * @typedef {{ type: 'StartClicked', audioEnabled: boolean }} EventStartClicked
  * @typedef {{ type: 'StopClicked' }} EventStopClicked
  * @typedef {{ type: 'DisplayMediaGranted', stream: MediaStream }} EventDisplayMediaGranted
  * @typedef {{ type: 'DisplayMediaFailed', reason: string }} EventDisplayMediaFailed
+ * @typedef {{ type: 'UserMediaGranted', stream: MediaStream }} EventUserMediaGranted
+ * @typedef {{ type: 'UserMediaFailed', reason: string }} EventUserMediaFailed
  * @typedef {{ type: 'TrackEnded' }} EventTrackEnded
  * @typedef {{ type: 'RecorderStopped', blob: Blob, mimeType: string }} EventRecorderStopped
  * @typedef {{ type: 'CreateOk', slug: string, uploadUrl: string, viewerUrl: string }} EventCreateOk
@@ -41,12 +46,13 @@
  * @typedef {EventStartClicked | EventStopClicked | EventDisplayMediaGranted
  *          | EventDisplayMediaFailed | EventTrackEnded | EventRecorderStopped
  *          | EventCreateOk | EventCreateFailed | EventPutOk | EventPutFailed
- *          | EventCopyClicked} Event
+ *          | EventCopyClicked | EventUserMediaGranted | EventUserMediaFailed} Event
  */
 
 /**
  * @typedef {{ type: 'requestDisplayMedia' }} EffectRequestDisplayMedia
- * @typedef {{ type: 'startRecording', stream: MediaStream }} EffectStartRecording
+ * @typedef {{ type: 'requestUserMedia' }} EffectRequestUserMedia
+ * @typedef {{ type: 'startRecording', stream: MediaStream, audioStream?: MediaStream }} EffectStartRecording
  * @typedef {{ type: 'stopRecording' }} EffectStopRecording
  * @typedef {{ type: 'releaseStream' }} EffectReleaseStream
  * @typedef {{ type: 'mintUpload', mimeType: string, sizeBytes: number }} EffectMintUpload
@@ -59,7 +65,8 @@
  * @typedef {{ type: 'hideResult' }} EffectHideResult
  * @typedef {{ type: 'copyToClipboard', text: string }} EffectCopyToClipboard
  *
- * @typedef {EffectRequestDisplayMedia | EffectStartRecording | EffectStopRecording
+ * @typedef {EffectRequestDisplayMedia | EffectRequestUserMedia
+ *          | EffectStartRecording | EffectStopRecording
  *          | EffectReleaseStream | EffectMintUpload | EffectPutBytes
  *          | EffectSetStatus | EffectSetButtons | EffectStartTimer | EffectStopTimer
  *          | EffectShowResult | EffectHideResult | EffectCopyToClipboard} Effect
@@ -89,22 +96,53 @@ export function transition(state, event) {
       if (state.kind !== 'Idle' && state.kind !== 'Done' && state.kind !== 'Failed') {
         return noop(state);
       }
+      const common = [
+        { type: 'hideResult' },
+        { type: 'setStatus', message: '' },
+        { type: 'setButtons', startEnabled: false, stopEnabled: false },
+      ];
+      if (event.audioEnabled) {
+        return {
+          next: { kind: 'RequestingMic' },
+          effects: [...common, { type: 'requestUserMedia' }],
+        };
+      }
       return {
         next: { kind: 'Starting' },
+        effects: [...common, { type: 'requestDisplayMedia' }],
+      };
+    }
+
+    case 'UserMediaGranted': {
+      if (state.kind !== 'RequestingMic') return noop(state);
+      return {
+        next: { kind: 'Starting', audioStream: event.stream },
+        effects: [{ type: 'requestDisplayMedia' }],
+      };
+    }
+
+    case 'UserMediaFailed': {
+      if (state.kind !== 'RequestingMic') return noop(state);
+      return {
+        next: { kind: 'Failed', message: event.reason },
         effects: [
-          { type: 'hideResult' },
-          { type: 'setStatus', message: '' },
-          { type: 'requestDisplayMedia' },
+          { type: 'setStatus', message: event.reason },
+          { type: 'setButtons', startEnabled: true, stopEnabled: false },
         ],
       };
     }
 
     case 'DisplayMediaGranted': {
       if (state.kind !== 'Starting') return noop(state);
+      // state.audioStream is set iff we entered via the mic-on path
+      // (StateStartingWithAudio); pass it through for the adapter to merge.
+      const startRecording = state.audioStream
+        ? { type: 'startRecording', stream: event.stream, audioStream: state.audioStream }
+        : { type: 'startRecording', stream: event.stream };
       return {
         next: { kind: 'Capturing' },
         effects: [
-          { type: 'startRecording', stream: event.stream },
+          startRecording,
           { type: 'setStatus', message: 'Recording…' },
           { type: 'setButtons', startEnabled: false, stopEnabled: true },
           { type: 'startTimer' },
@@ -114,12 +152,19 @@ export function transition(state, event) {
 
     case 'DisplayMediaFailed': {
       if (state.kind !== 'Starting') return noop(state);
+      const effects = [];
+      // Mic-on path held an audioStream that startRecording never consumed;
+      // release it so the browser tab's mic indicator goes off.
+      if (state.audioStream) {
+        effects.push({ type: 'releaseStream' });
+      }
+      effects.push(
+        { type: 'setStatus', message: `Could not start capture: ${event.reason}` },
+        { type: 'setButtons', startEnabled: true, stopEnabled: false },
+      );
       return {
         next: { kind: 'Failed', message: event.reason },
-        effects: [
-          { type: 'setStatus', message: `Could not start capture: ${event.reason}` },
-          { type: 'setButtons', startEnabled: true, stopEnabled: false },
-        ],
+        effects,
       };
     }
 

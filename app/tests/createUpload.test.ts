@@ -54,6 +54,25 @@ describe('POST /create-upload', () => {
     }
   });
 
+  it('accepts video/webm;codecs=vp9,opus (v0.2 mic-enabled) and round-trips it to R2', async () => {
+    const seenContentTypes: string[] = [];
+    const { app, cleanup } = buildTestApp({
+      mintUploadUrl: async ({ key, contentType }) => {
+        seenContentTypes.push(contentType);
+        return `https://fake-r2.test/${key}?signed=1`;
+      },
+    });
+    try {
+      const res = await request(app)
+        .post('/create-upload')
+        .send({ contentType: 'video/webm;codecs=vp9,opus', sizeBytes: 100 });
+      expect(res.status).toBe(200);
+      expect(seenContentTypes).toEqual(['video/webm;codecs=vp9,opus']);
+    } finally {
+      cleanup();
+    }
+  });
+
   it('rejects missing sizeBytes with 400', async () => {
     const { app, cleanup } = buildTestApp();
     try {

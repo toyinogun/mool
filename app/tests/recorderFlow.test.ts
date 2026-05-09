@@ -20,12 +20,13 @@ describe('recorderFlow.initialState', () => {
 });
 
 describe('transition: Idle', () => {
-  it('StartClicked → Starting + clears UI + requests display media', () => {
-    const r = transition(initialState(), { type: 'StartClicked' });
+  it('StartClicked{audioEnabled:false} → Starting + clears UI + requests display media', () => {
+    const r = transition(initialState(), { type: 'StartClicked', audioEnabled: false });
     expect(r.next).toEqual({ kind: 'Starting' });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
       { type: 'setStatus', message: '' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: false },
       { type: 'requestDisplayMedia' },
     ]);
   });
@@ -116,7 +117,7 @@ describe('transition: Capturing', () => {
   });
 
   it('ignores StartClicked (already capturing)', () => {
-    const r = transition(capturing, { type: 'StartClicked' });
+    const r = transition(capturing, { type: 'StartClicked', audioEnabled: false });
     expect(r.next).toEqual(capturing);
     expect(r.effects).toEqual([]);
   });
@@ -283,11 +284,12 @@ describe('transition: Done', () => {
   });
 
   it('StartClicked → Starting + clears UI (allows re-recording)', () => {
-    const r = transition(done, { type: 'StartClicked' });
+    const r = transition(done, { type: 'StartClicked', audioEnabled: false });
     expect(r.next).toEqual({ kind: 'Starting' });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
       { type: 'setStatus', message: '' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: false },
       { type: 'requestDisplayMedia' },
     ]);
   });
@@ -297,11 +299,12 @@ describe('transition: Failed', () => {
   const failed = { kind: 'Failed' as const, message: 'NotAllowedError' };
 
   it('StartClicked → Starting (allows retry after failure)', () => {
-    const r = transition(failed, { type: 'StartClicked' });
+    const r = transition(failed, { type: 'StartClicked', audioEnabled: false });
     expect(r.next).toEqual({ kind: 'Starting' });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
       { type: 'setStatus', message: '' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: false },
       { type: 'requestDisplayMedia' },
     ]);
   });
@@ -313,12 +316,107 @@ describe('transition: Failed', () => {
   });
 });
 
+describe('transition: Idle (audioEnabled:true)', () => {
+  it('StartClicked{audioEnabled:true} → RequestingMic + clears UI + requests user media', () => {
+    const r = transition(initialState(), { type: 'StartClicked', audioEnabled: true });
+    expect(r.next).toEqual({ kind: 'RequestingMic' });
+    expect(r.effects).toEqual([
+      { type: 'hideResult' },
+      { type: 'setStatus', message: '' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: false },
+      { type: 'requestUserMedia' },
+    ]);
+  });
+});
+
+describe('transition: RequestingMic', () => {
+  const requesting = { kind: 'RequestingMic' as const };
+
+  it('UserMediaGranted → Starting{audioStream} + requests display media', () => {
+    const r = transition(requesting, { type: 'UserMediaGranted', stream: fakeStream });
+    expect(r.next).toEqual({ kind: 'Starting', audioStream: fakeStream });
+    expect(r.effects).toEqual([
+      { type: 'requestDisplayMedia' },
+    ]);
+  });
+
+  it('UserMediaFailed → Failed + status carries the reason + re-enables Start', () => {
+    const r = transition(requesting, {
+      type: 'UserMediaFailed',
+      reason: 'Microphone access denied. Allow it in your browser, or turn off the mic toggle to record silently.',
+    });
+    expect(r.next).toEqual({
+      kind: 'Failed',
+      message:
+        'Microphone access denied. Allow it in your browser, or turn off the mic toggle to record silently.',
+    });
+    expect(r.effects).toEqual([
+      {
+        type: 'setStatus',
+        message:
+          'Microphone access denied. Allow it in your browser, or turn off the mic toggle to record silently.',
+      },
+      { type: 'setButtons', startEnabled: true, stopEnabled: false },
+    ]);
+  });
+
+  it('ignores StopClicked', () => {
+    const r = transition(requesting, { type: 'StopClicked' });
+    expect(r.next).toEqual(requesting);
+    expect(r.effects).toEqual([]);
+  });
+
+  it('ignores DisplayMediaGranted (cannot precede UserMediaGranted)', () => {
+    const r = transition(requesting, { type: 'DisplayMediaGranted', stream: fakeStream });
+    expect(r.next).toEqual(requesting);
+    expect(r.effects).toEqual([]);
+  });
+});
+
+describe('transition: Starting{audioStream}', () => {
+  const startingWithAudio = { kind: 'Starting' as const, audioStream: fakeStream };
+
+  it('DisplayMediaGranted → Capturing + startRecording{stream, audioStream} + UI updates', () => {
+    const screenStream = { id: 'screen' } as unknown as MediaStream;
+    const r = transition(startingWithAudio, {
+      type: 'DisplayMediaGranted',
+      stream: screenStream,
+    });
+    expect(r.next).toEqual({ kind: 'Capturing' });
+    expect(r.effects).toEqual([
+      { type: 'startRecording', stream: screenStream, audioStream: fakeStream },
+      { type: 'setStatus', message: 'Recording…' },
+      { type: 'setButtons', startEnabled: false, stopEnabled: true },
+      { type: 'startTimer' },
+    ]);
+  });
+
+  it('DisplayMediaFailed → Failed + releases the held mic stream', () => {
+    const r = transition(startingWithAudio, {
+      type: 'DisplayMediaFailed',
+      reason: 'NotAllowedError — user dismissed',
+    });
+    expect(r.next).toEqual({
+      kind: 'Failed',
+      message: 'NotAllowedError — user dismissed',
+    });
+    expect(r.effects).toEqual([
+      { type: 'releaseStream' },
+      {
+        type: 'setStatus',
+        message: 'Could not start capture: NotAllowedError — user dismissed',
+      },
+      { type: 'setButtons', startEnabled: true, stopEnabled: false },
+    ]);
+  });
+});
+
 describe('full happy-path replay', () => {
   it('Idle → Starting → Capturing → Stopping → MintingUrl → Uploading → Done', () => {
     const blob = bytes(1024, 'video/webm;codecs=vp9');
     let s = initialState();
 
-    s = transition(s, { type: 'StartClicked' }).next;
+    s = transition(s, { type: 'StartClicked', audioEnabled: false }).next;
     expect(s.kind).toBe('Starting');
 
     s = transition(s, { type: 'DisplayMediaGranted', stream: fakeStream }).next;

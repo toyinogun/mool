@@ -9,12 +9,22 @@ import { buildTestApp } from './helpers/testApp';
 
 describe('ALLOWED_MIME contract', () => {
   it('is the shared source of truth for accepted recorder content types', () => {
-    expect(ALLOWED_MIME).toEqual(['video/webm', 'video/webm;codecs=vp9']);
+    expect(ALLOWED_MIME).toEqual([
+      'video/webm',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+    ]);
     // Frozen so the route cannot mutate the contract at runtime.
     expect(Object.isFrozen(ALLOWED_MIME)).toBe(true);
     // Type-level: AllowedMime narrows to the same literals (compile-time check).
-    const sample: AllowedMime = 'video/webm;codecs=vp9';
-    expect(ALLOWED_MIME).toContain(sample);
+    const samples: AllowedMime[] = [
+      'video/webm',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+    ];
+    for (const s of samples) expect(ALLOWED_MIME).toContain(s);
   });
 });
 

@@ -24,6 +24,7 @@ const timerEl = document.getElementById('timer');
 const resultEl = document.getElementById('result');
 const linkEl = document.getElementById('share-link');
 const copyBtn = document.getElementById('copy');
+const micToggleEl = document.getElementById('mic-enabled');
 
 /** @type {State} */
 let state = initialState();
@@ -32,6 +33,8 @@ let state = initialState();
 let mediaRecorder = null;
 /** @type {MediaStream | null} */
 let activeStream = null;
+/** @type {MediaStream | null} */
+let activeAudioStream = null;
 /** @type {Blob[]} */
 let chunks = [];
 /** @type {ReturnType<typeof setInterval> | null} */
@@ -53,8 +56,11 @@ function runEffect(eff) {
     case 'requestDisplayMedia':
       requestDisplayMedia();
       return;
+    case 'requestUserMedia':
+      requestUserMedia();
+      return;
     case 'startRecording':
-      startRecording(eff.stream);
+      startRecording(eff.stream, eff.audioStream);
       return;
     case 'stopRecording':
       if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -62,9 +68,18 @@ function runEffect(eff) {
       }
       return;
     case 'releaseStream':
+      // After startRecording, the merged audio track is reachable via both
+      // activeStream.getTracks() and activeAudioStream.getTracks(). Stopping
+      // an already-ended MediaStreamTrack is a spec-defined no-op, so the
+      // double-stop here is harmless. Keep this assumption in mind if the
+      // .stop() call is ever replaced with something side-effectful.
       if (activeStream) {
         activeStream.getTracks().forEach((t) => t.stop());
         activeStream = null;
+      }
+      if (activeAudioStream) {
+        activeAudioStream.getTracks().forEach((t) => t.stop());
+        activeAudioStream = null;
       }
       return;
     case 'mintUpload':
@@ -79,6 +94,9 @@ function runEffect(eff) {
     case 'setButtons':
       startBtn.disabled = !eff.startEnabled;
       stopBtn.disabled = !eff.stopEnabled;
+      // The mic toggle is enabled exactly when Start is enabled — both
+      // are gated on "fresh capture is allowed" (Idle/Done/Failed).
+      micToggleEl.disabled = !eff.startEnabled;
       return;
     case 'startTimer':
       timerStartedAt = Date.now();
@@ -130,29 +148,92 @@ async function requestDisplayMedia() {
   dispatch({ type: 'DisplayMediaGranted', stream });
 }
 
-/** @param {MediaStream} stream */
-function startRecording(stream) {
+async function requestUserMedia() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    dispatch({
+      type: 'UserMediaFailed',
+      reason:
+        'Microphone API unavailable. The page must be served over https or http://localhost — check your URL.',
+    });
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (err) {
+    const name = err && err.name ? err.name : 'Error';
+    let message;
+    if (name === 'NotFoundError') {
+      message = 'No microphone found. Turn off the mic toggle to record silently.';
+    } else if (name === 'NotAllowedError' || name === 'SecurityError') {
+      message =
+        'Microphone access denied. Allow it in your browser, or turn off the mic toggle to record silently.';
+    } else {
+      const detail = err && err.message ? err.message : String(err);
+      message = `Microphone error: ${name} — ${detail}`;
+    }
+    dispatch({ type: 'UserMediaFailed', reason: message });
+    return;
+  }
+  // Hold the stream in adapter state so releaseStream can clean it up
+  // even if the screen-share prompt is denied (no startRecording yet).
+  activeAudioStream = stream;
+  dispatch({ type: 'UserMediaGranted', stream });
+}
+
+/**
+ * @param {MediaStream} stream
+ * @param {MediaStream | undefined} audioStream
+ */
+function startRecording(stream, audioStream) {
   activeStream = stream;
+  activeAudioStream = audioStream ?? null;
+
+  // Merge mic audio into the screen stream so a single MediaRecorder
+  // produces one container with both video and audio tracks.
+  if (audioStream) {
+    for (const track of audioStream.getAudioTracks()) {
+      stream.addTrack(track);
+    }
+  }
+
   chunks = [];
-  const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
-    ? 'video/webm;codecs=vp9'
-    : 'video/webm';
+  const mimeType = pickMimeType(Boolean(audioStream));
   mediaRecorder = new MediaRecorder(stream, { mimeType });
   mediaRecorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) chunks.push(e.data);
   };
   mediaRecorder.onstop = () => {
-    const finalMime = mediaRecorder ? mediaRecorder.mimeType : mimeType;
-    const blob = new Blob(chunks, { type: finalMime });
-    dispatch({ type: 'RecorderStopped', blob, mimeType: finalMime });
+    // Use the mime type we passed to the MediaRecorder constructor — that's
+    // what's pinned in ALLOWED_MIME server-side. The browser's
+    // mediaRecorder.mimeType may normalize codec ordering or add quoting,
+    // and the server's allow-list does exact-string comparison.
+    const blob = new Blob(chunks, { type: mimeType });
+    dispatch({ type: 'RecorderStopped', blob, mimeType });
   };
-  // If the user clicks the browser's native "Stop sharing" UI, the track
-  // ends and we want the SM to flow through Stopping just like StopClicked.
-  // TrackEnded received outside Capturing is a no-op (see recorderFlow.js).
-  stream.getVideoTracks()[0].onended = () => {
-    dispatch({ type: 'TrackEnded' });
-  };
+  // Either track ending (screen or mic) flows through Stopping.
+  // TrackEnded outside Capturing is a no-op (see recorderFlow.js).
+  for (const track of stream.getTracks()) {
+    track.onended = () => dispatch({ type: 'TrackEnded' });
+  }
   mediaRecorder.start();
+}
+
+/** @param {boolean} hasAudio */
+function pickMimeType(hasAudio) {
+  if (hasAudio) {
+    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')) {
+      return 'video/webm;codecs=vp9,opus';
+    }
+    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')) {
+      return 'video/webm;codecs=vp8,opus';
+    }
+    return 'video/webm';
+  }
+  if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
+    return 'video/webm;codecs=vp9';
+  }
+  return 'video/webm';
 }
 
 /**
@@ -206,6 +287,8 @@ function formatElapsed(ms) {
   return `${mm}:${ss}`;
 }
 
-startBtn.addEventListener('click', () => dispatch({ type: 'StartClicked' }));
+startBtn.addEventListener('click', () =>
+  dispatch({ type: 'StartClicked', audioEnabled: micToggleEl.checked }),
+);
 stopBtn.addEventListener('click', () => dispatch({ type: 'StopClicked' }));
 copyBtn.addEventListener('click', () => dispatch({ type: 'CopyClicked' }));
