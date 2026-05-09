@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import type { DB } from '../db';
 import type { R2 } from '../r2';
+import { SLUG_LENGTH } from '../slug';
 
-const SLUG_RE = /^[A-Za-z0-9]{6}$/;
+const SLUG_RE = new RegExp(`^[A-Za-z0-9]{${SLUG_LENGTH}}$`);
 
 export interface ViewerDeps {
   db: DB;
@@ -23,7 +24,9 @@ export function viewerRoute(deps: ViewerDeps) {
       return;
     }
     const videoUrl = deps.r2.publicUrl(rec.r2Key);
-    const html = deps.viewerTemplate.replace(/\{\{VIDEO_URL\}\}/g, videoUrl);
+    // Replacer function avoids $-interpretation in the replacement string,
+    // so URLs containing $ characters substitute literally.
+    const html = deps.viewerTemplate.replace(/\{\{VIDEO_URL\}\}/g, () => videoUrl);
     res.set('Content-Type', 'text/html; charset=utf-8').send(html);
   };
 }
