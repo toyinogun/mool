@@ -14,7 +14,10 @@ RUN npm ci --omit=dev
 COPY tsconfig.json ./
 COPY src ./src
 
-RUN apk del .build-deps
+RUN apk del .build-deps \
+ && chown -R node:node /app
+
+USER node
 
 ENV NODE_ENV=production
 ENV PORT=3000
