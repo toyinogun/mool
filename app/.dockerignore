@@ -1,0 +1,8 @@
+node_modules
+npm-debug.log
+dist
+tests
+vitest.config.mjs
+.env
+.env.*
+.DS_Store
