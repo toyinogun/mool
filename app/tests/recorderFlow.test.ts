@@ -21,7 +21,7 @@ describe('recorderFlow.initialState', () => {
 
 describe('transition: Idle', () => {
   it('StartClicked → Starting + clears UI + requests display media', () => {
-    const r = transition(initialState(), { type: 'StartClicked' });
+    const r = transition(initialState(), { type: 'StartClicked', audioEnabled: false });
     expect(r.next).toEqual({ kind: 'Starting' });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
@@ -116,7 +116,7 @@ describe('transition: Capturing', () => {
   });
 
   it('ignores StartClicked (already capturing)', () => {
-    const r = transition(capturing, { type: 'StartClicked' });
+    const r = transition(capturing, { type: 'StartClicked', audioEnabled: false });
     expect(r.next).toEqual(capturing);
     expect(r.effects).toEqual([]);
   });
@@ -283,7 +283,7 @@ describe('transition: Done', () => {
   });
 
   it('StartClicked → Starting + clears UI (allows re-recording)', () => {
-    const r = transition(done, { type: 'StartClicked' });
+    const r = transition(done, { type: 'StartClicked', audioEnabled: false });
     expect(r.next).toEqual({ kind: 'Starting' });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
@@ -297,7 +297,7 @@ describe('transition: Failed', () => {
   const failed = { kind: 'Failed' as const, message: 'NotAllowedError' };
 
   it('StartClicked → Starting (allows retry after failure)', () => {
-    const r = transition(failed, { type: 'StartClicked' });
+    const r = transition(failed, { type: 'StartClicked', audioEnabled: false });
     expect(r.next).toEqual({ kind: 'Starting' });
     expect(r.effects).toEqual([
       { type: 'hideResult' },
@@ -318,7 +318,7 @@ describe('full happy-path replay', () => {
     const blob = bytes(1024, 'video/webm;codecs=vp9');
     let s = initialState();
 
-    s = transition(s, { type: 'StartClicked' }).next;
+    s = transition(s, { type: 'StartClicked', audioEnabled: false }).next;
     expect(s.kind).toBe('Starting');
 
     s = transition(s, { type: 'DisplayMediaGranted', stream: fakeStream }).next;
