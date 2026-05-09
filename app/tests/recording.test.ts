@@ -172,3 +172,55 @@ describe('SLUG_LENGTH', () => {
     expect(SLUG_LENGTH).toBe(6);
   });
 });
+
+describe('createRecordings.create slug collision retry', () => {
+  it('retries when the generator returns a duplicate slug, then succeeds', async () => {
+    const db = openDb(':memory:');
+    db.insertRecording({
+      slug: 'taken1',
+      r2Key: 'taken1.webm',
+      mimeType: 'video/webm',
+      createdAt: 1,
+    });
+
+    const slugs = ['taken1', 'fresh2'];
+    let i = 0;
+    const recordings = createRecordings({
+      db,
+      r2: fakeR2(),
+      publicAppUrl: PUBLIC_APP_URL,
+      generateSlug: () => slugs[i++],
+    });
+
+    const result = await recordings.create({
+      contentType: 'video/webm',
+      sizeBytes: 100,
+    });
+
+    expect(result.slug).toBe('fresh2');
+    expect(i).toBe(2); // generator was called twice
+    db.close();
+  });
+
+  it('throws after exhausting MAX_SLUG_TRIES collisions', async () => {
+    const db = openDb(':memory:');
+    db.insertRecording({
+      slug: 'always',
+      r2Key: 'always.webm',
+      mimeType: 'video/webm',
+      createdAt: 1,
+    });
+
+    const recordings = createRecordings({
+      db,
+      r2: fakeR2(),
+      publicAppUrl: PUBLIC_APP_URL,
+      generateSlug: () => 'always',
+    });
+
+    await expect(
+      recordings.create({ contentType: 'video/webm', sizeBytes: 100 }),
+    ).rejects.toThrow(/slug_generation_exhausted/);
+    db.close();
+  });
+});
