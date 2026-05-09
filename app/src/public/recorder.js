@@ -40,13 +40,22 @@ function resetUiAfterFailure() {
 async function start() {
   resultEl.hidden = true;
   setStatus('');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    setStatus(
+      'getDisplayMedia is unavailable. The page must be served over https or http://localhost — check your URL.',
+    );
+    return;
+  }
   try {
     stream = await navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: 30 },
       audio: false,
     });
   } catch (err) {
-    setStatus('Screen-share permission denied or cancelled.');
+    console.error('getDisplayMedia failed:', err);
+    const name = err && err.name ? err.name : 'Error';
+    const msg = err && err.message ? err.message : String(err);
+    setStatus(`Could not start capture: ${name} — ${msg}`);
     return;
   }
 

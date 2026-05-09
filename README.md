@@ -112,14 +112,34 @@ npm test         # run the unit + integration tests
 npm run dev      # auto-reloading dev server
 ```
 
-For local dev with `npm start` / `npm run dev`, place a `.env` file inside
-`app/` (next to `package.json`) — `dotenv` looks at the process working
-directory. For Docker Compose, `.env` lives at the repo root and is read
-via `env_file:` in `docker-compose.yml`. Both files are gitignored.
+`.env` lives at the **repo root** and is read by both `dotenv` (for `npm
+run dev`) and Docker Compose (`env_file: .env`). It's gitignored.
 
-When testing locally, R2 calls hit real R2; just make sure `PUBLIC_APP_URL`
-matches the URL you're hitting. R2 CORS is restricted to the public hostname,
-so browser uploads from `http://localhost:3000` will fail — for full
+### Reaching the dev server from your laptop browser
+
+Browsers only expose `getDisplayMedia` (the screen-capture API) in **secure
+contexts** — HTTPS or `http://localhost` / `http://127.0.0.1`. Plain HTTP to
+a private IP like `http://192.168.x.x:3000` does **not** count, and the API
+is silently unavailable.
+
+If the dev server runs on a remote machine, port-forward it to your laptop
+over SSH and open `http://localhost:3000` from there:
+
+```bash
+ssh -L 3000:localhost:3000 you@your-server
+# then in your laptop browser: http://localhost:3000
+```
+
+### What works against placeholder R2 credentials
+
+The recorder UI, screen capture, recording loop, and the `POST /create-upload`
+server roundtrip work without real R2. The browser-to-R2 PUT will fail
+("Upload failed during transfer") because the presigned URL points at a
+placeholder endpoint. Replace the `R2_*` values in `.env` with real ones
+(see steps 1+2 above) for end-to-end uploads.
+
+R2 CORS is restricted to whatever you put in `AllowedOrigins`. For local
+testing you can add `http://localhost:3000` to the list. For full
 end-to-end testing, run the recorder via the Cloudflare Tunnel hostname.
 
 ## Project layout
