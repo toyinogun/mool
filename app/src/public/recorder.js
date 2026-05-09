@@ -1,6 +1,7 @@
 /**
  * @typedef {import('../contracts').CreateUploadResponse} CreateUploadResponse
  * @typedef {import('../contracts').CreateUploadErrorResponse} CreateUploadErrorResponse
+ * @typedef {import('../contracts').AllowedMime} AllowedMime
  */
 
 const startBtn = document.getElementById('start');
@@ -65,6 +66,7 @@ async function start() {
   }
 
   chunks = [];
+  /** @type {AllowedMime} */
   const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
     ? 'video/webm;codecs=vp9'
     : 'video/webm';
