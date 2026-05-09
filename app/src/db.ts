@@ -2,6 +2,15 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 
+export class DuplicateSlugError extends Error {
+  readonly slug: string;
+  constructor(slug: string) {
+    super(`Recording with slug "${slug}" already exists`);
+    this.name = 'DuplicateSlugError';
+    this.slug = slug;
+  }
+}
+
 export interface Recording {
   slug: string;
   r2Key: string;
@@ -43,7 +52,14 @@ export function openDb(dbPath: string): DB {
 
   return {
     insertRecording(rec) {
-      insertStmt.run(rec.slug, rec.r2Key, rec.mimeType, rec.createdAt);
+      try {
+        insertStmt.run(rec.slug, rec.r2Key, rec.mimeType, rec.createdAt);
+      } catch (err) {
+        if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+          throw new DuplicateSlugError(rec.slug);
+        }
+        throw err;
+      }
     },
     getRecording(slug) {
       return (getStmt.get(slug) as Recording | undefined) ?? null;
