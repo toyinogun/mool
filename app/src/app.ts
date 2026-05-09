@@ -25,7 +25,7 @@ export function asyncRoute(fn: AsyncHandler): RequestHandler {
 export interface AppDeps {
   recordings: Recordings;
   maxUploadBytes: number;
-  viewerTemplate: string;
+  renderViewerPage: (inputs: { playbackUrl: string }) => string;
   /** Absolute path to the static-assets directory, or null in tests. */
   publicDir: string | null;
 }
@@ -40,7 +40,7 @@ export function createApp(deps: AppDeps): Express {
 
   app.get(VIEWER_ROUTE, asyncRoute(viewerRoute({
     recordings: deps.recordings,
-    viewerTemplate: deps.viewerTemplate,
+    renderViewerPage: deps.renderViewerPage,
   })));
   app.post('/create-upload', asyncRoute(createUploadRoute({
     recordings: deps.recordings,

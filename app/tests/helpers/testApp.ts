@@ -1,6 +1,7 @@
 import { createApp } from '../../src/app';
 import { createRecordings, type Recordings, type RecordingsDeps } from '../../src/recording';
 import { createUrls } from '../../src/urls';
+import { createViewerPage } from '../../src/viewerPage';
 import type { Express } from 'express';
 
 export function fakeR2() {
@@ -41,10 +42,11 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
     viewerUrl: urls.viewerUrl,
     generateSlug: opts.generateSlug,
   });
+  const { renderViewerPage } = createViewerPage({ template: VIEWER_TEMPLATE_STUB });
   const app = createApp({
     recordings,
     maxUploadBytes: opts.maxUploadBytes ?? 500 * 1024 * 1024,
-    viewerTemplate: VIEWER_TEMPLATE_STUB,
+    renderViewerPage,
     publicDir: null,
   });
   return { app, recordings, cleanup: () => recordings.close() };

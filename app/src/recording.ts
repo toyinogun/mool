@@ -10,11 +10,11 @@ export const ALLOWED_MIME: readonly AllowedMime[] = Object.freeze([
 ]);
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-export const SLUG_LENGTH = 6;
+const SLUG_LENGTH = 6;
 const SLUG_RE = new RegExp(`^[A-Za-z0-9]{${SLUG_LENGTH}}$`);
 const MAX_SLUG_TRIES = 5;
 
-export function isValidSlug(s: string): boolean {
+function isValidSlug(s: string): boolean {
   return SLUG_RE.test(s);
 }
 

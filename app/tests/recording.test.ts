@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   createRecordings,
-  isValidSlug,
-  SLUG_LENGTH,
   SlugGenerationExhaustedError,
   UnsupportedContentTypeError,
 } from '../src/recording';
@@ -190,25 +188,6 @@ describe('createRecordings.get', () => {
   });
 });
 
-describe('isValidSlug', () => {
-  it('accepts a 6-character base62 string', () => {
-    expect(isValidSlug('abc123')).toBe(true);
-    expect(isValidSlug('AaZz09')).toBe(true);
-  });
-
-  it('rejects wrong length', () => {
-    expect(isValidSlug('abc12')).toBe(false);
-    expect(isValidSlug('abc1234')).toBe(false);
-    expect(isValidSlug('')).toBe(false);
-  });
-
-  it('rejects non-base62 characters', () => {
-    expect(isValidSlug('abc-12')).toBe(false);
-    expect(isValidSlug('abc 12')).toBe(false);
-    expect(isValidSlug('abc!23')).toBe(false);
-  });
-});
-
 describe('slug generation (via create)', () => {
   it('produces highly unique slugs over many invocations', async () => {
     const recordings = createRecordings({
@@ -228,12 +207,6 @@ describe('slug generation (via create)', () => {
     }
     expect(seen.size).toBeGreaterThan(195);
     recordings.close();
-  });
-});
-
-describe('SLUG_LENGTH', () => {
-  it('is 6', () => {
-    expect(SLUG_LENGTH).toBe(6);
   });
 });
 
