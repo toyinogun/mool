@@ -9,6 +9,7 @@ import type { Recordings } from './recording';
 import type { CreateUploadErrorResponse } from './contracts';
 import { createUploadRoute } from './routes/createUpload';
 import { viewerRoute } from './routes/viewer';
+import { VIEWER_ROUTE } from './urls';
 
 type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
 
@@ -38,7 +39,7 @@ export function createApp(deps: AppDeps): Express {
     res.json({ ok: true });
   });
 
-  app.get('/v/:slug', asyncRoute(viewerRoute({
+  app.get(VIEWER_ROUTE, asyncRoute(viewerRoute({
     recordings: deps.recordings,
     viewerTemplate: deps.viewerTemplate,
   })));

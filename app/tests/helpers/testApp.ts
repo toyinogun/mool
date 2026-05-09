@@ -2,6 +2,7 @@ import { createApp } from '../../src/app';
 import { openDb, type DB } from '../../src/db';
 import { createRecordings, type Recordings } from '../../src/recording';
 import type { R2 } from '../../src/r2';
+import { createUrls } from '../../src/urls';
 import type { Express } from 'express';
 
 export function fakeR2(): R2 {
@@ -31,10 +32,11 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
   cleanup: () => void;
 } {
   const db = openDb(':memory:');
+  const urls = createUrls({ publicAppUrl: 'https://record.example.com' });
   const recordings = createRecordings({
     db,
     r2: opts.r2 ?? fakeR2(),
-    publicAppUrl: 'https://record.example.com',
+    viewerUrl: urls.viewerUrl,
   });
   const app = createApp({
     recordings,
