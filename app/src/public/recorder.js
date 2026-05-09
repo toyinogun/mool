@@ -92,13 +92,7 @@ const ports = {
   requestDisplay: () => capture.requestDisplay(),
   requestUser: () => capture.requestUser(),
   startCapture(stream, audioStream, onTrackEnded) {
-    capture.start(stream, audioStream);
-    // Either track ending (screen or mic) flows through Stopping.
-    // TrackEnded outside Capturing is a no-op (see recorderFlow.js).
-    // Iterate AFTER start() so the merged audio tracks are included.
-    for (const track of stream.getTracks()) {
-      track.onended = onTrackEnded;
-    }
+    capture.start(stream, audioStream, onTrackEnded);
   },
   stopCapture: () => capture.stop(),
   mintUpload: ({ mimeType, sizeBytes }) =>

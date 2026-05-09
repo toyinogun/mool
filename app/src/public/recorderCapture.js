@@ -122,18 +122,29 @@ export function createCapture({ navigator, MediaRecorderCtor, pickMimeType: pick
     /**
      * Begin recording. If `optAudioStream` is provided, its audio tracks are
      * merged into `stream` so a single MediaRecorder produces one container
-     * with both video and audio.
+     * with both video and audio. If `onTrackEnded` is provided, it is wired
+     * to every track on the (merged) stream — either source ending (the
+     * screen-share toolbar's Stop, the mic being unplugged) flows through
+     * one callback. The wiring runs AFTER the merge so newly-added audio
+     * tracks are included.
      *
      * @param {MediaStream} stream
      * @param {MediaStream | undefined} [optAudioStream]
+     * @param {(() => void) | undefined} [onTrackEnded]
      */
-    start(stream, optAudioStream) {
+    start(stream, optAudioStream, onTrackEnded) {
       screenStream = stream;
       if (optAudioStream) audioStream = optAudioStream;
 
       if (audioStream) {
         for (const track of audioStream.getAudioTracks()) {
           stream.addTrack(track);
+        }
+      }
+
+      if (onTrackEnded) {
+        for (const track of stream.getTracks()) {
+          track.onended = onTrackEnded;
         }
       }
 
