@@ -42,7 +42,7 @@ export interface RecordingView {
 
 export interface Recordings {
   create(args: CreateRecordingArgs): Promise<CreatedRecording>;
-  get(slug: string): RecordingView | null;
+  get(slug: string): Promise<RecordingView | null>;
 }
 
 export interface RecordingsDeps {
@@ -111,7 +111,7 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
       });
     },
 
-    get(slug) {
+    async get(slug) {
       if (!isValidSlug(slug)) return null;
       const row: Recording | null = deps.db.getRecording(slug);
       if (!row) return null;

@@ -110,6 +110,20 @@ describe('createRecordings.create', () => {
 });
 
 describe('createRecordings.get', () => {
+  it('returns a Promise (locks in pre-v0.4 async shape for presigned-GET migration)', async () => {
+    const db = openDb(':memory:');
+    const recordings = createRecordings({
+      db,
+      r2: fakeR2(),
+      publicAppUrl: PUBLIC_APP_URL,
+    });
+
+    const result = recordings.get('zzzzzz');
+    expect(result).toBeInstanceOf(Promise);
+    expect(await result).toBeNull();
+    db.close();
+  });
+
   it('returns the recording with its viewer-side URLs for a known slug', async () => {
     const db = openDb(':memory:');
     db.insertRecording({
@@ -124,7 +138,7 @@ describe('createRecordings.get', () => {
       publicAppUrl: PUBLIC_APP_URL,
     });
 
-    const got = recordings.get('abc123');
+    const got = await recordings.get('abc123');
 
     expect(got).not.toBeNull();
     expect(got!.slug).toBe('abc123');
@@ -132,7 +146,7 @@ describe('createRecordings.get', () => {
     db.close();
   });
 
-  it('returns null for an unknown slug', () => {
+  it('returns null for an unknown slug', async () => {
     const db = openDb(':memory:');
     const recordings = createRecordings({
       db,
@@ -140,11 +154,11 @@ describe('createRecordings.get', () => {
       publicAppUrl: PUBLIC_APP_URL,
     });
 
-    expect(recordings.get('zzzzzz')).toBeNull();
+    expect(await recordings.get('zzzzzz')).toBeNull();
     db.close();
   });
 
-  it('returns null for a malformed slug without touching db', () => {
+  it('returns null for a malformed slug without touching db', async () => {
     const db = openDb(':memory:');
     const recordings = createRecordings({
       db,
@@ -152,8 +166,8 @@ describe('createRecordings.get', () => {
       publicAppUrl: PUBLIC_APP_URL,
     });
 
-    expect(recordings.get('!!')).toBeNull();
-    expect(recordings.get('toolong')).toBeNull();
+    expect(await recordings.get('!!')).toBeNull();
+    expect(await recordings.get('toolong')).toBeNull();
     db.close();
   });
 });

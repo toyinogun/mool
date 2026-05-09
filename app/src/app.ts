@@ -38,10 +38,10 @@ export function createApp(deps: AppDeps): Express {
     res.json({ ok: true });
   });
 
-  app.get('/v/:slug', viewerRoute({
+  app.get('/v/:slug', asyncRoute(viewerRoute({
     recordings: deps.recordings,
     viewerTemplate: deps.viewerTemplate,
-  }));
+  })));
   app.post('/create-upload', asyncRoute(createUploadRoute({
     recordings: deps.recordings,
     maxUploadBytes: deps.maxUploadBytes,
