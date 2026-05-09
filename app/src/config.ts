@@ -1,6 +1,11 @@
+import path from 'node:path';
 import { config as loadDotenv } from 'dotenv';
 
-loadDotenv();
+// Load .env from the repo root regardless of process cwd. This file lives at
+// app/src/config.ts; two levels up is the repo root where .env sits next to
+// docker-compose.yml. In Docker the env vars are already injected via
+// env_file:, so this lookup silently no-ops when the file is absent.
+loadDotenv({ path: path.resolve(__dirname, '..', '..', '.env') });
 
 export interface R2Config {
   accessKeyId: string;

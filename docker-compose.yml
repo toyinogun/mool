@@ -9,6 +9,10 @@ services:
       - ./data:/data
     env_file: .env
     environment:
+      # Hard-code the in-container storage path (volume mount target) and
+      # internal port (the target cloudflared connects to as app:3000).
+      # User .env overrides for these don't make sense — they would break
+      # the contract between this service and the rest of the stack.
       DATA_DIR: /data
       PORT: "3000"
     healthcheck:
@@ -22,7 +26,7 @@ services:
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?TUNNEL_TOKEN must be set in .env}
     depends_on:
       app:
         condition: service_healthy
