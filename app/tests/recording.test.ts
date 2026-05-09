@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { openDb } from '../src/db';
-import { createRecordings, isValidSlug, SLUG_LENGTH } from '../src/recording';
+import {
+  createRecordings,
+  isValidSlug,
+  SLUG_LENGTH,
+  SlugGenerationExhaustedError,
+} from '../src/recording';
 import type { R2 } from '../src/r2';
 
 function fakeR2(): R2 {
@@ -58,6 +63,34 @@ describe('createRecordings.create', () => {
     db.close();
   });
 
+  it('passes the caller-provided contentType through to the DB row and to R2', async () => {
+    const db = openDb(':memory:');
+    const seenContentTypes: string[] = [];
+    const capturingR2: R2 = {
+      async mintUploadUrl({ key, contentType }) {
+        seenContentTypes.push(contentType);
+        return `https://fake-r2.test/${key}?signed=1`;
+      },
+      publicUrl(key) {
+        return `https://videos.example.com/${key}`;
+      },
+    };
+    const recordings = createRecordings({
+      db,
+      r2: capturingR2,
+      publicAppUrl: PUBLIC_APP_URL,
+    });
+
+    const { slug } = await recordings.create({
+      contentType: 'video/webm;codecs=vp9',
+      sizeBytes: 100,
+    });
+
+    expect(db.getRecording(slug)?.mimeType).toBe('video/webm;codecs=vp9');
+    expect(seenContentTypes).toEqual(['video/webm;codecs=vp9']);
+    db.close();
+  });
+
   it('strips a trailing slash from publicAppUrl when building viewerUrl', async () => {
     const db = openDb(':memory:');
     const recordings = createRecordings({
@@ -77,6 +110,20 @@ describe('createRecordings.create', () => {
 });
 
 describe('createRecordings.get', () => {
+  it('returns a Promise (locks in pre-v0.4 async shape for presigned-GET migration)', async () => {
+    const db = openDb(':memory:');
+    const recordings = createRecordings({
+      db,
+      r2: fakeR2(),
+      publicAppUrl: PUBLIC_APP_URL,
+    });
+
+    const result = recordings.get('zzzzzz');
+    expect(result).toBeInstanceOf(Promise);
+    expect(await result).toBeNull();
+    db.close();
+  });
+
   it('returns the recording with its viewer-side URLs for a known slug', async () => {
     const db = openDb(':memory:');
     db.insertRecording({
@@ -91,7 +138,7 @@ describe('createRecordings.get', () => {
       publicAppUrl: PUBLIC_APP_URL,
     });
 
-    const got = recordings.get('abc123');
+    const got = await recordings.get('abc123');
 
     expect(got).not.toBeNull();
     expect(got!.slug).toBe('abc123');
@@ -99,7 +146,7 @@ describe('createRecordings.get', () => {
     db.close();
   });
 
-  it('returns null for an unknown slug', () => {
+  it('returns null for an unknown slug', async () => {
     const db = openDb(':memory:');
     const recordings = createRecordings({
       db,
@@ -107,11 +154,11 @@ describe('createRecordings.get', () => {
       publicAppUrl: PUBLIC_APP_URL,
     });
 
-    expect(recordings.get('zzzzzz')).toBeNull();
+    expect(await recordings.get('zzzzzz')).toBeNull();
     db.close();
   });
 
-  it('returns null for a malformed slug without touching db', () => {
+  it('returns null for a malformed slug without touching db', async () => {
     const db = openDb(':memory:');
     const recordings = createRecordings({
       db,
@@ -119,8 +166,8 @@ describe('createRecordings.get', () => {
       publicAppUrl: PUBLIC_APP_URL,
     });
 
-    expect(recordings.get('!!')).toBeNull();
-    expect(recordings.get('toolong')).toBeNull();
+    expect(await recordings.get('!!')).toBeNull();
+    expect(await recordings.get('toolong')).toBeNull();
     db.close();
   });
 });
@@ -224,9 +271,17 @@ describe('createRecordings.create slug collision retry', () => {
       },
     });
 
-    await expect(
-      recordings.create({ contentType: 'video/webm', sizeBytes: 100 }),
-    ).rejects.toThrow(/slug_generation_exhausted/);
+    const err = await recordings
+      .create({ contentType: 'video/webm', sizeBytes: 100 })
+      .then(
+        () => {
+          throw new Error('expected create to reject');
+        },
+        (e) => e,
+      );
+    expect(err).toBeInstanceOf(SlugGenerationExhaustedError);
+    expect((err as SlugGenerationExhaustedError).tries).toBe(5);
+    expect((err as SlugGenerationExhaustedError).lastError).toBeDefined();
     expect(calls).toBe(5);
     db.close();
   });

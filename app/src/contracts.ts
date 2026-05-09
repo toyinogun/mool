@@ -7,6 +7,13 @@
  * test in tests/contracts.test.ts pins the contract.
  */
 
+export type AllowedMime = 'video/webm' | 'video/webm;codecs=vp9';
+
+export const ALLOWED_MIME: readonly AllowedMime[] = Object.freeze([
+  'video/webm',
+  'video/webm;codecs=vp9',
+]);
+
 export interface CreateUploadResponse {
   slug: string;
   uploadUrl: string;

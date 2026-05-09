@@ -12,6 +12,17 @@ export function isValidSlug(s: string): boolean {
   return SLUG_RE.test(s);
 }
 
+export class SlugGenerationExhaustedError extends Error {
+  readonly tries: number;
+  readonly lastError: unknown;
+  constructor({ tries, lastError }: { tries: number; lastError: unknown }) {
+    super(`slug_generation_exhausted after ${tries} tries (last: ${String(lastError)})`);
+    this.name = 'SlugGenerationExhaustedError';
+    this.tries = tries;
+    this.lastError = lastError;
+  }
+}
+
 export interface CreateRecordingArgs {
   contentType: string;
   sizeBytes: number;
@@ -31,7 +42,7 @@ export interface RecordingView {
 
 export interface Recordings {
   create(args: CreateRecordingArgs): Promise<CreatedRecording>;
-  get(slug: string): RecordingView | null;
+  get(slug: string): Promise<RecordingView | null>;
 }
 
 export interface RecordingsDeps {
@@ -69,7 +80,7 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
           deps.db.insertRecording({
             slug,
             r2Key,
-            mimeType: 'video/webm',
+            mimeType: contentType,
             createdAt: Date.now(),
           });
         } catch (err) {
@@ -94,12 +105,13 @@ export function createRecordings(deps: RecordingsDeps): Recordings {
           viewerUrl: `${baseUrl}/v/${slug}`,
         };
       }
-      throw new Error(
-        `slug_generation_exhausted after ${MAX_SLUG_TRIES} tries (last: ${String(lastErr)})`,
-      );
+      throw new SlugGenerationExhaustedError({
+        tries: MAX_SLUG_TRIES,
+        lastError: lastErr,
+      });
     },
 
-    get(slug) {
+    async get(slug) {
       if (!isValidSlug(slug)) return null;
       const row: Recording | null = deps.db.getRecording(slug);
       if (!row) return null;

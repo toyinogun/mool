@@ -1,6 +1,7 @@
 /**
  * @typedef {import('../contracts').CreateUploadResponse} CreateUploadResponse
  * @typedef {import('../contracts').CreateUploadErrorResponse} CreateUploadErrorResponse
+ * @typedef {import('../contracts').AllowedMime} AllowedMime
  */
 
 const startBtn = document.getElementById('start');
@@ -65,6 +66,7 @@ async function start() {
   }
 
   chunks = [];
+  /** @type {AllowedMime} */
   const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
     ? 'video/webm;codecs=vp9'
     : 'video/webm';
@@ -116,7 +118,8 @@ async function onRecordingStopped() {
     stream.getTracks().forEach((t) => t.stop());
   }
 
-  const blob = new Blob(chunks, { type: 'video/webm' });
+  const mimeType = mediaRecorder.mimeType;
+  const blob = new Blob(chunks, { type: mimeType });
   if (blob.size === 0) {
     setStatus('Recording was empty — nothing to upload.');
     resetUiAfterFailure();
@@ -128,7 +131,7 @@ async function onRecordingStopped() {
     createRes = await fetch('/create-upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contentType: 'video/webm', sizeBytes: blob.size }),
+      body: JSON.stringify({ contentType: mimeType, sizeBytes: blob.size }),
     });
   } catch (err) {
     setStatus('Upload failed: could not reach server.');
@@ -161,7 +164,7 @@ async function onRecordingStopped() {
   try {
     putRes = await fetch(uploadUrl, {
       method: 'PUT',
-      headers: { 'Content-Type': 'video/webm' },
+      headers: { 'Content-Type': mimeType },
       body: blob,
     });
   } catch (err) {

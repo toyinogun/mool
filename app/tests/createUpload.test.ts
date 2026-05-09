@@ -36,13 +36,26 @@ describe('POST /create-upload', () => {
     }
   });
 
-  it('accepts video/webm with codec parameter (e.g. video/webm;codecs=vp9)', async () => {
-    const { app, cleanup } = buildTestApp();
+  it('accepts video/webm with codec parameter (e.g. video/webm;codecs=vp9) and round-trips it', async () => {
+    const seenContentTypes: string[] = [];
+    const captureR2: R2 = {
+      async mintUploadUrl({ key, contentType }) {
+        seenContentTypes.push(contentType);
+        return `https://fake-r2.test/${key}?signed=1`;
+      },
+      publicUrl(key) {
+        return `https://videos.example.com/${key}`;
+      },
+    };
+    const { app, db, cleanup } = buildTestApp({ r2: captureR2 });
     try {
       const res = await request(app)
         .post('/create-upload')
         .send({ contentType: 'video/webm;codecs=vp9', sizeBytes: 100 });
       expect(res.status).toBe(200);
+      const row = db.getRecording(res.body.slug);
+      expect(row?.mimeType).toBe('video/webm;codecs=vp9');
+      expect(seenContentTypes).toEqual(['video/webm;codecs=vp9']);
     } finally {
       cleanup();
     }

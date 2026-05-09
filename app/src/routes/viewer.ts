@@ -7,9 +7,9 @@ export interface ViewerDeps {
 }
 
 export function viewerRoute(deps: ViewerDeps) {
-  return (req: Request, res: Response): void => {
+  return async (req: Request, res: Response): Promise<void> => {
     const { slug } = req.params;
-    const view = deps.recordings.get(slug);
+    const view = await deps.recordings.get(slug);
     if (!view) {
       res.status(404).type('text/plain').send('Not found');
       return;

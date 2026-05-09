@@ -1,8 +1,10 @@
 import type { Request, Response } from 'express';
 import type { Recordings } from '../recording';
-import type { CreateUploadResponse, CreateUploadErrorResponse } from '../contracts';
-
-const ALLOWED_MIME = new Set(['video/webm', 'video/webm;codecs=vp9']);
+import {
+  ALLOWED_MIME,
+  type CreateUploadResponse,
+  type CreateUploadErrorResponse,
+} from '../contracts';
 
 export interface CreateUploadDeps {
   recordings: Recordings;
@@ -18,7 +20,7 @@ export function createUploadRoute(deps: CreateUploadDeps) {
   return async (req: Request, res: Response): Promise<void> => {
     const body = req.body ?? {};
     const ct = normalizeMime(body.contentType);
-    if (!ALLOWED_MIME.has(ct)) {
+    if (!(ALLOWED_MIME as readonly string[]).includes(ct)) {
       const errBody: CreateUploadErrorResponse = { error: 'invalid_content_type' };
       res.status(400).json(errBody);
       return;
@@ -44,7 +46,7 @@ export function createUploadRoute(deps: CreateUploadDeps) {
     }
 
     const created: CreateUploadResponse = await deps.recordings.create({
-      contentType: 'video/webm',
+      contentType: ct,
       sizeBytes,
     });
     res.json(created);

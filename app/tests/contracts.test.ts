@@ -4,8 +4,21 @@ import type { R2 } from '../src/r2';
 import type {
   CreateUploadResponse,
   CreateUploadErrorCode,
+  AllowedMime,
 } from '../src/contracts';
+import { ALLOWED_MIME } from '../src/contracts';
 import { buildTestApp, fakeR2 } from './helpers/testApp';
+
+describe('ALLOWED_MIME contract', () => {
+  it('is the shared source of truth for accepted recorder content types', () => {
+    expect(ALLOWED_MIME).toEqual(['video/webm', 'video/webm;codecs=vp9']);
+    // Frozen so the route cannot mutate the contract at runtime.
+    expect(Object.isFrozen(ALLOWED_MIME)).toBe(true);
+    // Type-level: AllowedMime narrows to the same literals (compile-time check).
+    const sample: AllowedMime = 'video/webm;codecs=vp9';
+    expect(ALLOWED_MIME).toContain(sample);
+  });
+});
 
 describe('POST /create-upload wire contract', () => {
   it('success response contains exactly { slug, uploadUrl, viewerUrl }', async () => {
