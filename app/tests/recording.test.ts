@@ -199,10 +199,12 @@ describe('createRecordings.create slug collision retry', () => {
 
     expect(result.slug).toBe('fresh2');
     expect(i).toBe(2); // generator was called twice
+    expect(db.getRecording('fresh2')).not.toBeNull();
+    expect(db.getRecording('fresh2')!.r2Key).toBe('fresh2.webm');
     db.close();
   });
 
-  it('throws after exhausting MAX_SLUG_TRIES collisions', async () => {
+  it('throws after exhausting MAX_SLUG_TRIES (5) collisions', async () => {
     const db = openDb(':memory:');
     db.insertRecording({
       slug: 'always',
@@ -211,16 +213,21 @@ describe('createRecordings.create slug collision retry', () => {
       createdAt: 1,
     });
 
+    let calls = 0;
     const recordings = createRecordings({
       db,
       r2: fakeR2(),
       publicAppUrl: PUBLIC_APP_URL,
-      generateSlug: () => 'always',
+      generateSlug: () => {
+        calls++;
+        return 'always';
+      },
     });
 
     await expect(
       recordings.create({ contentType: 'video/webm', sizeBytes: 100 }),
     ).rejects.toThrow(/slug_generation_exhausted/);
+    expect(calls).toBe(5);
     db.close();
   });
 });
