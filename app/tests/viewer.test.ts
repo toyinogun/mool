@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { buildTestApp } from './helpers/testApp';
+import { createApp } from '../src/app';
+import type { Recordings } from '../src/recording';
 
 describe('GET /v/:slug', () => {
   it('returns HTML containing the public R2 URL for an existing slug', async () => {
@@ -43,5 +45,26 @@ describe('GET /v/:slug', () => {
     } finally {
       cleanup();
     }
+  });
+
+  it('returns plain-text 500 (not JSON) when recordings.get throws', async () => {
+    const failingRecordings: Recordings = {
+      create: async () => {
+        throw new Error('not exercised in this test');
+      },
+      get: async () => {
+        throw new Error('DB exploded');
+      },
+    };
+    const app = createApp({
+      recordings: failingRecordings,
+      maxUploadBytes: 1024,
+      viewerTemplate: '<!doctype html><html><body><video src="{{VIDEO_URL}}"></video></body></html>',
+      publicDir: null,
+    });
+    const res = await request(app).get('/v/abc123');
+    expect(res.status).toBe(500);
+    expect(res.headers['content-type']).toContain('text/plain');
+    expect(res.text).not.toContain('internal_server_error');
   });
 });
