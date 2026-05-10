@@ -23,6 +23,7 @@ import {
 } from './recorderUpload.js';
 import { createCapture } from './recorderCapture.js';
 import { runEffect } from './recorderEffects.js';
+import { composeStreams } from './recorderComposite.js';
 
 const startBtn = document.getElementById('start');
 const stopBtn = document.getElementById('stop');
@@ -46,6 +47,9 @@ let state = initialState();
 let cameraStream = null;
 let previewVisible = true;
 let camGen = 0;
+
+/** @type {(() => void) | null} */
+let composeStop = null;
 
 const capture = createCapture({
   navigator,
@@ -99,12 +103,33 @@ const ports = {
     }
   },
   releaseStream() {
+    if (composeStop) {
+      try { composeStop(); } catch { /* idempotent */ }
+      composeStop = null;
+    }
     capture.release();
   },
   requestDisplay: () => capture.requestDisplay(),
   requestUser: () => capture.requestUser(),
-  startCapture(stream, audioStream, _videoEnabled, onTrackEnded) {
-    capture.start(stream, audioStream, onTrackEnded);
+  startCapture(stream, audioStream, videoEnabled, onTrackEnded) {
+    if (videoEnabled && cameraStream) {
+      const composite = composeStreams({
+        screenStream: stream,
+        cameraStream,
+      });
+      composeStop = composite.stop;
+      composite.onCameraEnded(() => {
+        ports.setStatus('Camera disconnected — continuing with screen only.');
+      });
+      // capture.start receives the composite stream as its "screen" stream.
+      // Audio merging stays in capture (single source of truth for mime
+      // negotiation). The composite track ending — driven by the screen
+      // track ending in composeStreams — propagates as TrackEnded via
+      // capture's onended wiring on the merged stream's tracks.
+      capture.start(composite.compositeStream, audioStream, onTrackEnded);
+    } else {
+      capture.start(stream, audioStream, onTrackEnded);
+    }
   },
   stopCapture: () => capture.stop(),
   mintUpload: ({ mimeType, sizeBytes }) =>
