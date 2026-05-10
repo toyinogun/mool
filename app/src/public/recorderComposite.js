@@ -80,6 +80,7 @@ export function composeStreams({ screenStream, cameraStream }) {
   const cameraEndedCallbacks = [];
 
   cameraTrack.addEventListener('ended', () => {
+    if (stopped) return;
     cameraActive = false;
     for (const cb of cameraEndedCallbacks) {
       try { cb(); } catch { /* swallow — one bad listener shouldn't stop others */ }
