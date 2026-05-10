@@ -45,6 +45,7 @@ let state = initialState();
 /** @type {MediaStream | null} */
 let cameraStream = null;
 let previewVisible = true;
+let camGen = 0;
 
 const capture = createCapture({
   navigator,
@@ -157,16 +158,20 @@ camPreviewShowBtn.addEventListener('click', () => {
 });
 
 async function turnCameraOn() {
+  const myGen = ++camGen;
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showCamFailure(
-      'Camera API unavailable. The page must be served over https or http://localhost — check your URL.',
-    );
+    if (myGen === camGen) {
+      showCamFailure(
+        'Camera API unavailable. The page must be served over https or http://localhost — check your URL.',
+      );
+    }
     return;
   }
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
   } catch (err) {
+    if (myGen !== camGen) return;
     const name = err && err.name ? err.name : 'Error';
     let message;
     if (name === 'NotFoundError') {
@@ -181,6 +186,13 @@ async function turnCameraOn() {
     return;
   }
 
+  if (myGen !== camGen || !camToggleEl.checked) {
+    // User toggled away (or rapid on→off→on) while we were awaiting the
+    // permission prompt. Release the stream we just got — we don't own it.
+    stream.getTracks().forEach((t) => t.stop());
+    return;
+  }
+
   cameraStream = stream;
   camPreviewVideo.srcObject = stream;
   void camPreviewVideo.play().catch(() => {});
@@ -191,11 +203,10 @@ async function turnCameraOn() {
     camPreviewWrap.hidden = true;
     camPreviewHidden.hidden = false;
   }
-  // Clear any prior failure message.
-  ports.setStatus('');
 }
 
 function turnCameraOff() {
+  camGen++;
   if (cameraStream) {
     cameraStream.getTracks().forEach((t) => t.stop());
     cameraStream = null;
