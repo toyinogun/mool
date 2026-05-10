@@ -33,7 +33,7 @@
  * @property {() => void} releaseStream
  * @property {() => Promise<StreamOutcome>} requestDisplay
  * @property {() => Promise<StreamOutcome>} requestUser
- * @property {(stream: MediaStream, audioStream: MediaStream | undefined, onTrackEnded: () => void) => void} startCapture
+ * @property {(stream: MediaStream, audioStream: MediaStream | undefined, videoEnabled: boolean, onTrackEnded: () => void) => void} startCapture
  * @property {() => Promise<{ blob: Blob, mimeType: string }>} stopCapture
  * @property {(args: { mimeType: string, sizeBytes: number }) => Promise<MintOutcome>} mintUpload
  * @property {(args: { uploadUrl: string, blob: Blob, mimeType: string }) => Promise<PutOutcome>} putBytes
@@ -83,7 +83,7 @@ export async function runEffect(eff, ports) {
       return;
 
     case 'startRecording':
-      ports.startCapture(eff.stream, eff.audioStream, () =>
+      ports.startCapture(eff.stream, eff.audioStream, eff.videoEnabled, () =>
         ports.dispatch({ type: 'TrackEnded' }),
       );
       return;

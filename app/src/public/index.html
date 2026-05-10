@@ -11,11 +11,25 @@
       <h1>Mool</h1>
       <p class="tagline">Record your screen and share a link.</p>
 
-      <div class="mic-toggle">
-        <label>
+      <div class="toggle-row">
+        <label class="toggle-pill">
           <input type="checkbox" id="mic-enabled" checked />
           🎤 Mic on
         </label>
+        <label class="toggle-pill">
+          <input type="checkbox" id="cam-enabled" />
+          📷 Camera on
+        </label>
+      </div>
+
+      <div id="cam-preview-wrap" class="cam-preview-wrap" hidden>
+        <video id="cam-preview" class="cam-preview" autoplay playsinline muted aria-label="Camera preview (mirrored)"></video>
+        <button type="button" id="cam-preview-toggle" class="link-button">Hide preview</button>
+      </div>
+
+      <div id="cam-preview-hidden" class="cam-preview-hidden" hidden>
+        <span>Camera on, preview hidden</span>
+        <button type="button" id="cam-preview-show" class="link-button" aria-label="Show camera preview">Show</button>
       </div>
 
       <div class="controls">

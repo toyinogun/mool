@@ -114,31 +114,38 @@ describe('runEffect — synchronous DOM mutations', () => {
 });
 
 describe('runEffect — startRecording wires the TrackEnded callback', () => {
-  it('calls ports.startCapture with stream, audioStream, and onTrackEnded', async () => {
+  it('calls ports.startCapture with stream, audioStream, videoEnabled, and onTrackEnded', async () => {
     const ports = makePorts();
     await runEffect(
-      { type: 'startRecording', stream: fakeStream, audioStream: fakeAudio },
+      { type: 'startRecording', stream: fakeStream, audioStream: fakeAudio, videoEnabled: false },
       ports,
     );
     expect(ports.startCapture).toHaveBeenCalledTimes(1);
     const args = ports.startCapture.mock.calls[0];
     expect(args[0]).toBe(fakeStream);
     expect(args[1]).toBe(fakeAudio);
-    expect(typeof args[2]).toBe('function');
+    expect(args[2]).toBe(false);
+    expect(typeof args[3]).toBe('function');
   });
 
   it('passes undefined audioStream when omitted from the effect', async () => {
     const ports = makePorts();
-    await runEffect({ type: 'startRecording', stream: fakeStream }, ports);
+    await runEffect({ type: 'startRecording', stream: fakeStream, videoEnabled: false }, ports);
     expect(ports.startCapture.mock.calls[0][1]).toBeUndefined();
   });
 
   it('the onTrackEnded callback dispatches TrackEnded when invoked', async () => {
     const ports = makePorts();
-    await runEffect({ type: 'startRecording', stream: fakeStream }, ports);
-    const onTrackEnded = ports.startCapture.mock.calls[0][2] as () => void;
+    await runEffect({ type: 'startRecording', stream: fakeStream, videoEnabled: false }, ports);
+    const onTrackEnded = ports.startCapture.mock.calls[0][3] as () => void;
     onTrackEnded();
     expect(ports.dispatch).toHaveBeenCalledWith({ type: 'TrackEnded' });
+  });
+
+  it('forwards videoEnabled:true to startCapture', async () => {
+    const ports = makePorts();
+    await runEffect({ type: 'startRecording', stream: fakeStream, videoEnabled: true }, ports);
+    expect(ports.startCapture.mock.calls[0][2]).toBe(true);
   });
 });
 

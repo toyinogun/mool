@@ -13,9 +13,9 @@
 
 /**
  * @typedef {{ kind: 'Idle' }} StateIdle
- * @typedef {{ kind: 'Starting' }} StateStarting
- * @typedef {{ kind: 'Starting', audioStream: MediaStream }} StateStartingWithAudio
- * @typedef {{ kind: 'RequestingMic' }} StateRequestingMic
+ * @typedef {{ kind: 'Starting', videoEnabled: boolean }} StateStarting
+ * @typedef {{ kind: 'Starting', audioStream: MediaStream, videoEnabled: boolean }} StateStartingWithAudio
+ * @typedef {{ kind: 'RequestingMic', videoEnabled: boolean }} StateRequestingMic
  * @typedef {{ kind: 'Capturing' }} StateCapturing
  * @typedef {{ kind: 'Stopping' }} StateStopping
  * @typedef {{ kind: 'MintingUrl', blob: Blob, mimeType: string }} StateMintingUrl
@@ -29,7 +29,7 @@
  */
 
 /**
- * @typedef {{ type: 'StartClicked', audioEnabled: boolean }} EventStartClicked
+ * @typedef {{ type: 'StartClicked', audioEnabled: boolean, videoEnabled: boolean }} EventStartClicked
  * @typedef {{ type: 'StopClicked' }} EventStopClicked
  * @typedef {{ type: 'DisplayMediaGranted', stream: MediaStream }} EventDisplayMediaGranted
  * @typedef {{ type: 'DisplayMediaFailed', reason: string }} EventDisplayMediaFailed
@@ -52,7 +52,7 @@
 /**
  * @typedef {{ type: 'requestDisplayMedia' }} EffectRequestDisplayMedia
  * @typedef {{ type: 'requestUserMedia' }} EffectRequestUserMedia
- * @typedef {{ type: 'startRecording', stream: MediaStream, audioStream?: MediaStream }} EffectStartRecording
+ * @typedef {{ type: 'startRecording', stream: MediaStream, audioStream?: MediaStream, videoEnabled: boolean }} EffectStartRecording
  * @typedef {{ type: 'stopRecording' }} EffectStopRecording
  * @typedef {{ type: 'releaseStream' }} EffectReleaseStream
  * @typedef {{ type: 'mintUpload', mimeType: string, sizeBytes: number }} EffectMintUpload
@@ -103,12 +103,12 @@ export function transition(state, event) {
       ];
       if (event.audioEnabled) {
         return {
-          next: { kind: 'RequestingMic' },
+          next: { kind: 'RequestingMic', videoEnabled: event.videoEnabled },
           effects: [...common, { type: 'requestUserMedia' }],
         };
       }
       return {
-        next: { kind: 'Starting' },
+        next: { kind: 'Starting', videoEnabled: event.videoEnabled },
         effects: [...common, { type: 'requestDisplayMedia' }],
       };
     }
@@ -116,7 +116,7 @@ export function transition(state, event) {
     case 'UserMediaGranted': {
       if (state.kind !== 'RequestingMic') return noop(state);
       return {
-        next: { kind: 'Starting', audioStream: event.stream },
+        next: { kind: 'Starting', audioStream: event.stream, videoEnabled: state.videoEnabled },
         effects: [{ type: 'requestDisplayMedia' }],
       };
     }
@@ -136,9 +136,16 @@ export function transition(state, event) {
       if (state.kind !== 'Starting') return noop(state);
       // state.audioStream is set iff we entered via the mic-on path
       // (StateStartingWithAudio); pass it through for the adapter to merge.
+      // state.videoEnabled is always present and goes on every startRecording
+      // emission so the adapter can decide whether to compose camera in.
       const startRecording = state.audioStream
-        ? { type: 'startRecording', stream: event.stream, audioStream: state.audioStream }
-        : { type: 'startRecording', stream: event.stream };
+        ? {
+            type: 'startRecording',
+            stream: event.stream,
+            audioStream: state.audioStream,
+            videoEnabled: state.videoEnabled,
+          }
+        : { type: 'startRecording', stream: event.stream, videoEnabled: state.videoEnabled };
       return {
         next: { kind: 'Capturing' },
         effects: [
