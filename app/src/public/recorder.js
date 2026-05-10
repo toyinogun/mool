@@ -48,7 +48,13 @@ let cameraStream = null;
 let previewVisible = true;
 let camGen = 0;
 
-/** @type {(() => void) | null} */
+/**
+ * Cancellation handle for the active canvas composite. Captured in
+ * startCapture() when videoEnabled && cameraStream, consumed in
+ * releaseStream() before capture.release() and nulled. Null otherwise
+ * (camera-off recording, or before any recording has started).
+ * @type {(() => void) | null}
+ */
 let composeStop = null;
 
 const capture = createCapture({
@@ -104,7 +110,7 @@ const ports = {
   },
   releaseStream() {
     if (composeStop) {
-      try { composeStop(); } catch { /* idempotent */ }
+      composeStop();
       composeStop = null;
     }
     capture.release();
