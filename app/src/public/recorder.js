@@ -32,9 +32,19 @@ const resultEl = document.getElementById('result');
 const linkEl = document.getElementById('share-link');
 const copyBtn = document.getElementById('copy');
 const micToggleEl = document.getElementById('mic-enabled');
+const camToggleEl = /** @type {HTMLInputElement} */ (document.getElementById('cam-enabled'));
+const camPreviewWrap = /** @type {HTMLElement} */ (document.getElementById('cam-preview-wrap'));
+const camPreviewHidden = /** @type {HTMLElement} */ (document.getElementById('cam-preview-hidden'));
+const camPreviewVideo = /** @type {HTMLVideoElement} */ (document.getElementById('cam-preview'));
+const camPreviewToggleBtn = /** @type {HTMLButtonElement} */ (document.getElementById('cam-preview-toggle'));
+const camPreviewShowBtn = /** @type {HTMLButtonElement} */ (document.getElementById('cam-preview-show'));
 
 /** @type {State} */
 let state = initialState();
+
+/** @type {MediaStream | null} */
+let cameraStream = null;
+let previewVisible = true;
 
 const capture = createCapture({
   navigator,
@@ -53,9 +63,10 @@ const ports = {
   setButtons({ startEnabled, stopEnabled }) {
     startBtn.disabled = !startEnabled;
     stopBtn.disabled = !stopEnabled;
-    // The mic toggle is enabled exactly when Start is enabled — both are
-    // gated on "fresh capture is allowed" (Idle/Done/Failed).
+    // Both toggles are enabled exactly when Start is enabled — both gate
+    // on "fresh capture is allowed" (Idle/Done/Failed).
     micToggleEl.disabled = !startEnabled;
+    camToggleEl.disabled = !startEnabled;
   },
   startTimer() {
     timerStartedAt = Date.now();
@@ -120,7 +131,91 @@ function formatElapsed(ms) {
 }
 
 startBtn.addEventListener('click', () =>
-  dispatch({ type: 'StartClicked', audioEnabled: micToggleEl.checked, videoEnabled: false }),
+  dispatch({ type: 'StartClicked', audioEnabled: micToggleEl.checked, videoEnabled: camToggleEl.checked }),
 );
 stopBtn.addEventListener('click', () => dispatch({ type: 'StopClicked' }));
 copyBtn.addEventListener('click', () => dispatch({ type: 'CopyClicked' }));
+
+camToggleEl.addEventListener('change', async () => {
+  if (camToggleEl.checked) {
+    await turnCameraOn();
+  } else {
+    turnCameraOff();
+  }
+});
+
+camPreviewToggleBtn.addEventListener('click', () => {
+  previewVisible = false;
+  camPreviewWrap.hidden = true;
+  camPreviewHidden.hidden = false;
+});
+
+camPreviewShowBtn.addEventListener('click', () => {
+  previewVisible = true;
+  camPreviewHidden.hidden = true;
+  camPreviewWrap.hidden = false;
+});
+
+async function turnCameraOn() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showCamFailure(
+      'Camera API unavailable. The page must be served over https or http://localhost — check your URL.',
+    );
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+  } catch (err) {
+    const name = err && err.name ? err.name : 'Error';
+    let message;
+    if (name === 'NotFoundError') {
+      message = 'No camera found. Recording will be screen-only.';
+    } else if (name === 'NotAllowedError' || name === 'SecurityError') {
+      message = 'Camera access denied. Allow it in your browser, or leave the camera off.';
+    } else {
+      const detail = err && err.message ? err.message : String(err);
+      message = `Camera error: ${name} — ${detail}`;
+    }
+    showCamFailure(message);
+    return;
+  }
+
+  cameraStream = stream;
+  camPreviewVideo.srcObject = stream;
+  void camPreviewVideo.play().catch(() => {});
+  if (previewVisible) {
+    camPreviewWrap.hidden = false;
+    camPreviewHidden.hidden = true;
+  } else {
+    camPreviewWrap.hidden = true;
+    camPreviewHidden.hidden = false;
+  }
+  // Clear any prior failure message.
+  ports.setStatus('');
+}
+
+function turnCameraOff() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+  }
+  camPreviewVideo.srcObject = null;
+  camPreviewWrap.hidden = true;
+  camPreviewHidden.hidden = true;
+}
+
+/**
+ * Bounce the toggle back to off and surface the failure message.
+ * Does not affect any other state — the SM is not involved.
+ *
+ * @param {string} message
+ */
+function showCamFailure(message) {
+  camToggleEl.checked = false;
+  cameraStream = null;
+  camPreviewVideo.srcObject = null;
+  camPreviewWrap.hidden = true;
+  camPreviewHidden.hidden = true;
+  ports.setStatus(message);
+}
