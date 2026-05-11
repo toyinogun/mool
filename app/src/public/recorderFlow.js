@@ -149,10 +149,12 @@ export function transition(state, event) {
       return {
         next: { kind: 'Capturing' },
         effects: [
+          // startTimer fires first so timerStartedAt is fresh by the time
+          // startRecording → startCapture → openFloatingCam reads it.
+          { type: 'startTimer' },
           startRecording,
           { type: 'setStatus', message: 'Recording…' },
           { type: 'setButtons', startEnabled: false, stopEnabled: true },
-          { type: 'startTimer' },
         ],
       };
     }
