@@ -60,10 +60,10 @@ describe('transition: Starting', () => {
     const r = transition(start, { type: 'DisplayMediaGranted', stream: fakeStream });
     expect(r.next).toEqual({ kind: 'Capturing' });
     expect(r.effects).toEqual([
+      { type: 'startTimer' },
       { type: 'startRecording', stream: fakeStream, videoEnabled: false },
       { type: 'setStatus', message: 'Recording…' },
       { type: 'setButtons', startEnabled: false, stopEnabled: true },
-      { type: 'startTimer' },
     ]);
   });
 
@@ -384,10 +384,10 @@ describe('transition: Starting{audioStream}', () => {
     });
     expect(r.next).toEqual({ kind: 'Capturing' });
     expect(r.effects).toEqual([
+      { type: 'startTimer' },
       { type: 'startRecording', stream: screenStream, audioStream: fakeStream, videoEnabled: false },
       { type: 'setStatus', message: 'Recording…' },
       { type: 'setButtons', startEnabled: false, stopEnabled: true },
-      { type: 'startTimer' },
     ]);
   });
 
@@ -447,10 +447,10 @@ describe('transition: videoEnabled threading', () => {
     const r = transition(starting, { type: 'DisplayMediaGranted', stream: screen });
     expect(r.next).toEqual({ kind: 'Capturing' });
     expect(r.effects).toEqual([
+      { type: 'startTimer' },
       { type: 'startRecording', stream: screen, videoEnabled: true },
       { type: 'setStatus', message: 'Recording…' },
       { type: 'setButtons', startEnabled: false, stopEnabled: true },
-      { type: 'startTimer' },
     ]);
   });
 
@@ -460,10 +460,10 @@ describe('transition: videoEnabled threading', () => {
     const r = transition(starting, { type: 'DisplayMediaGranted', stream: screen });
     expect(r.next).toEqual({ kind: 'Capturing' });
     expect(r.effects).toEqual([
+      { type: 'startTimer' },
       { type: 'startRecording', stream: screen, audioStream: fakeStream, videoEnabled: true },
       { type: 'setStatus', message: 'Recording…' },
       { type: 'setButtons', startEnabled: false, stopEnabled: true },
-      { type: 'startTimer' },
     ]);
   });
 
