@@ -86,8 +86,12 @@ export function openFloatingCam({
         copyStyleSheets: true,
       });
     } catch (err) {
-      if (!closeRequested && onError) {
-        try { onError(err); } catch { /* one bad listener shouldn't stop teardown */ }
+      if (!closeRequested) {
+        if (onError) {
+          try { onError(err); } catch { /* one bad listener shouldn't stop teardown */ }
+        } else {
+          console.error('openFloatingCam: requestWindow failed', err);
+        }
       }
       return;
     }
@@ -138,7 +142,7 @@ export function openFloatingCam({
     stopBtn.addEventListener('click', () => {
       if (stopFired) return;
       stopFired = true;
-      try { onStopClicked(); } catch { /* swallow — caller surfaces */ }
+      try { onStopClicked(); } catch (err) { console.error('openFloatingCam: onStopClicked threw', err); }
     });
 
     // Manual-close detection. closeRequested is set by `close()` below, so
@@ -149,7 +153,7 @@ export function openFloatingCam({
       if (closedFired) return;
       closedFired = true;
       if (onClosed) {
-        try { onClosed(); } catch { /* swallow */ }
+        try { onClosed(); } catch (err) { console.error('openFloatingCam: onClosed threw', err); }
       }
     });
   }
