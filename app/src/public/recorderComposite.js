@@ -2,12 +2,19 @@
  * Canvas-based picture-in-picture compositor for the Recorder page.
  *
  * Takes a screen MediaStream and a camera MediaStream and returns a single
- * composite MediaStream whose video track is a hidden <canvas> drawn by a
- * requestAnimationFrame loop: the screen frame as the base layer, then the
+ * composite MediaStream whose video track is a hidden <canvas> drawn on a
+ * tick from a Web Worker: the screen frame as the base layer, then the
  * webcam clipped to a circle in the bottom-left at 18% of canvas height
  * with a 4% margin from both edges. The webcam frame is centre-cropped to
  * a square before draw so 16:9 or 4:3 webcam feeds aren't distorted by the
  * circular clip.
+ *
+ * Drawing is driven by a setInterval inside a Web Worker rather than
+ * requestAnimationFrame because background tabs throttle rAF to ~1 Hz,
+ * which froze the recorded video when the user switched to the tab they
+ * were recording. Worker timers aren't subject to visibility throttling,
+ * and postMessage tasks on the main thread aren't treated as timer tasks,
+ * so draws continue at ~30 fps while the Recorder tab is hidden.
  *
  * The composite is video-only. Audio merging stays in recorderCapture.js
  * (single source of truth for mime-type selection); the adapter passes
@@ -87,13 +94,10 @@ export function composeStreams({ screenStream, cameraStream }) {
     }
   });
 
-  /** @type {number | null} */
-  let rafId = null;
   let stopped = false;
 
   function draw() {
     if (stopped) return;
-    rafId = requestAnimationFrame(draw);
 
     // Base: screen frame.
     if (screenVideo.readyState >= 2) {
@@ -133,7 +137,28 @@ export function composeStreams({ screenStream, cameraStream }) {
     }
   }
 
-  rafId = requestAnimationFrame(draw);
+  // Inline Web Worker that fires a tick every ~33 ms (≈30 fps). Worker
+  // setInterval keeps running at full rate while the tab is hidden, so the
+  // canvas keeps getting redrawn for the duration of the recording.
+  const tickWorkerSource = `
+    let tickId = null;
+    self.onmessage = (e) => {
+      if (e.data === 'start') {
+        tickId = setInterval(() => self.postMessage(0), 33);
+      } else if (e.data === 'stop') {
+        clearInterval(tickId);
+        tickId = null;
+      }
+    };
+  `;
+  const tickWorkerUrl = URL.createObjectURL(
+    new Blob([tickWorkerSource], { type: 'application/javascript' }),
+  );
+  const tickWorker = new Worker(tickWorkerUrl);
+  tickWorker.onmessage = () => {
+    if (!stopped) draw();
+  };
+  tickWorker.postMessage('start');
 
   // The composite's video track. captureStream samples the canvas at 30 fps
   // regardless of how often draw() runs.
@@ -157,10 +182,9 @@ export function composeStreams({ screenStream, cameraStream }) {
   function stop() {
     if (stopped) return;
     stopped = true;
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
+    try { tickWorker.postMessage('stop'); } catch { /* worker may already be gone */ }
+    tickWorker.terminate();
+    URL.revokeObjectURL(tickWorkerUrl);
     for (const t of compositeStream.getVideoTracks()) {
       try { t.stop(); } catch { /* idempotent */ }
     }
