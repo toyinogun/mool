@@ -24,6 +24,7 @@ import {
 import { createCapture } from './recorderCapture.js';
 import { runEffect } from './recorderEffects.js';
 import { composeStreams } from './recorderComposite.js';
+import { isFloatingCamSupported, openFloatingCam } from './recorderFloatingCam.js';
 
 const startBtn = document.getElementById('start');
 const stopBtn = document.getElementById('stop');
@@ -39,6 +40,9 @@ const camPreviewHidden = /** @type {HTMLElement} */ (document.getElementById('ca
 const camPreviewVideo = /** @type {HTMLVideoElement} */ (document.getElementById('cam-preview'));
 const camPreviewToggleBtn = /** @type {HTMLButtonElement} */ (document.getElementById('cam-preview-toggle'));
 const camPreviewShowBtn = /** @type {HTMLButtonElement} */ (document.getElementById('cam-preview-show'));
+const camPipNote = /** @type {HTMLElement} */ (document.getElementById('cam-pip-note'));
+
+const floatingCamSupported = isFloatingCamSupported();
 
 /** @type {State} */
 let state = initialState();
@@ -234,6 +238,9 @@ async function turnCameraOn() {
     camPreviewWrap.hidden = true;
     camPreviewHidden.hidden = false;
   }
+  if (!floatingCamSupported) {
+    camPipNote.hidden = false;
+  }
 }
 
 function turnCameraOff() {
@@ -245,6 +252,7 @@ function turnCameraOff() {
   camPreviewVideo.srcObject = null;
   camPreviewWrap.hidden = true;
   camPreviewHidden.hidden = true;
+  camPipNote.hidden = true;
 }
 
 /**
@@ -259,5 +267,6 @@ function showCamFailure(message) {
   camPreviewVideo.srcObject = null;
   camPreviewWrap.hidden = true;
   camPreviewHidden.hidden = true;
+  camPipNote.hidden = true;
   ports.setStatus(message);
 }
