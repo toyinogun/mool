@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Your library · Mool</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="library-page">
+  <header class="mool-header"><span class="mool-header-brand">Mool</span><nav class="mool-header-nav"><a href="/">Record</a><form action="/auth/signout" method="post" class="mool-signout-form"><button type="submit">Sign out</button></form></nav></header>
+  <main>
+    <h1>Your recordings</h1>
+    <ul id="library-list"></ul>
+    <script id="library-data" type="application/json">{{RECORDINGS_JSON}}</script>
+    <script type="module" src="/library.js"></script>
+  </main>
+</body>
+</html>

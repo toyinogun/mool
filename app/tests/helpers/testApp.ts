@@ -15,11 +15,17 @@ export function fakeR2() {
     publicUrl(key: string) {
       return `https://videos.example.com/${key}`;
     },
+    async deleteObject(_key: string): Promise<void> {
+      // no-op by default; override via BuildTestAppOpts.deleteObject
+    },
   };
 }
 
 const VIEWER_TEMPLATE_STUB = `<!doctype html>
 <html><body><video src="{{PLAYBACK_URL}}"></video></body></html>`;
+
+const LIBRARY_TEMPLATE_STUB = `<!doctype html>
+<html><body><script id="library-data" type="application/json">{{RECORDINGS_JSON}}</script></body></html>`;
 
 export interface BuildTestAppOpts {
   maxUploadBytes?: number;
@@ -27,6 +33,8 @@ export interface BuildTestAppOpts {
   mintUploadUrl?: RecordingsBaseDeps['mintUploadUrl'];
   /** Override the public-URL composer — rarely needed; default mirrors prod shape. */
   publicUrl?: ComposeLeaves['publicUrl'];
+  /** Override the R2 deleteObject implementation — defaults to a no-op. */
+  deleteObject?: (key: string) => Promise<void>;
   /** Override the slug generator — useful when a test needs a known slug. */
   generateSlug?: () => string;
   /** Override the auth store — defaults to a fresh in-memory impl. */
@@ -54,9 +62,11 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
   const { app, recordings } = compose({
     db: null,
     template: VIEWER_TEMPLATE_STUB,
+    libraryTemplate: LIBRARY_TEMPLATE_STUB,
     publicAppUrl: 'https://record.example.com',
     mintUploadUrl: opts.mintUploadUrl ?? defaults.mintUploadUrl,
     publicUrl: opts.publicUrl ?? defaults.publicUrl,
+    deleteObject: opts.deleteObject ?? defaults.deleteObject,
     maxUploadBytes: opts.maxUploadBytes ?? 500 * 1024 * 1024,
     publicDir: null,
     generateSlug: opts.generateSlug,

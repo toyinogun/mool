@@ -17,6 +17,7 @@ import { createApp } from './app';
 import { createPostgresRecordings, createInMemoryRecordings, type Recordings, type RecordingsBaseDeps } from './recording';
 import { createUrls } from './urls';
 import { createViewerPage } from './viewerPage';
+import { createLibraryPage } from './libraryPage';
 import type { Db } from './db/client';
 import type { AuthStore } from './auth/authStore';
 import type { EmailSender } from './email/sender';
@@ -26,12 +27,16 @@ export interface ComposeLeaves {
   db: Db | null;
   /** The Viewer page HTML template, already loaded. */
   template: string;
+  /** The Library page HTML template, already loaded. */
+  libraryTemplate: string;
   /** Mool's public-facing app URL, e.g. `https://record.example.com`. */
   publicAppUrl: string;
   /** R2 minter — production passes the real SDK call; tests pass a fake. */
   mintUploadUrl: RecordingsBaseDeps['mintUploadUrl'];
   /** R2 public-URL composer — consumed by the Viewer route per ADR-0015. */
   publicUrl: (key: string) => string;
+  /** R2 object deleter — production passes the real SDK call; tests pass a fake. */
+  deleteObject: (key: string) => Promise<void>;
   /** Hard limit on Upload sizes accepted by `/create-upload`. */
   maxUploadBytes: number;
   /** Absolute path to the static-assets directory in production; `null` in tests. */
@@ -56,12 +61,15 @@ export function compose(leaves: ComposeLeaves): { app: Express; recordings: Reco
     ? createPostgresRecordings({ db: leaves.db, mintUploadUrl: leaves.mintUploadUrl, viewerUrl: urls.viewerUrl, generateSlug: leaves.generateSlug })
     : createInMemoryRecordings({ mintUploadUrl: leaves.mintUploadUrl, viewerUrl: urls.viewerUrl, generateSlug: leaves.generateSlug });
   const { renderViewerPage } = createViewerPage({ template: leaves.template });
+  const { renderLibraryPage } = createLibraryPage({ template: leaves.libraryTemplate });
   const app = createApp({
     recordings,
     authStore: leaves.authStore,
     emailSender: leaves.emailSender,
     maxUploadBytes: leaves.maxUploadBytes,
     renderViewerPage,
+    renderLibraryPage,
+    deleteObject: leaves.deleteObject,
     publicUrl: leaves.publicUrl,
     publicDir: leaves.publicDir,
     publicAppUrl: leaves.publicAppUrl,

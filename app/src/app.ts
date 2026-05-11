@@ -15,6 +15,9 @@ import { authRequestLinkRoute } from './routes/authRequestLink';
 import { authCallbackRoute } from './routes/authCallback';
 import { authSignoutRoute } from './routes/authSignout';
 import { meRoute } from './routes/me';
+import { listRecordingsRoute } from './routes/listRecordings';
+import { deleteRecordingRoute } from './routes/deleteRecording';
+import { libraryPageRoute } from './routes/libraryPage';
 import { requireSession } from './auth/requireSession';
 import { VIEWER_ROUTE } from './urls';
 
@@ -36,6 +39,10 @@ export interface AppDeps {
   emailSender: EmailSender;
   maxUploadBytes: number;
   renderViewerPage: (inputs: { playbackUrl: string }) => string;
+  /** Renders the Library page HTML from its template. */
+  renderLibraryPage: (inputs: { recordingsJson: string }) => string;
+  /** Deletes an R2 object by key. */
+  deleteObject: (key: string) => Promise<void>;
   /** Builds the public URL where R2 serves a stored object's bytes. See ADR-0015. */
   publicUrl: (key: string) => string;
   /** Absolute path to the static-assets directory, or null in tests. */
@@ -100,6 +107,18 @@ export function createApp(deps: AppDeps): Express {
     cookieSecure: deps.cookieSecure,
   })));
   app.get('/me', requireSessionJson, meRoute());
+
+  app.get('/library', requireSessionHtml, asyncRoute(libraryPageRoute({
+    recordings: deps.recordings,
+    renderLibraryPage: deps.renderLibraryPage,
+  })));
+  app.get('/api/recordings', requireSessionJson, asyncRoute(listRecordingsRoute({
+    recordings: deps.recordings,
+  })));
+  app.delete('/recordings/:slug', requireSessionJson, asyncRoute(deleteRecordingRoute({
+    recordings: deps.recordings,
+    deleteObject: deps.deleteObject,
+  })));
 
   // Static middleware — serves all assets except index.html so / is gated above.
   if (deps.publicDir) {

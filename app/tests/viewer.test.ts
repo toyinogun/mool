@@ -92,6 +92,12 @@ describe('GET /v/:slug', () => {
       renderViewerPage: () => {
         throw new Error('renderViewerPage should not be called when recordings.get throws');
       },
+      renderLibraryPage: () => {
+        throw new Error('renderLibraryPage should not be called in this test');
+      },
+      deleteObject: async () => {
+        throw new Error('deleteObject should not be called in this test');
+      },
       publicUrl: () => {
         throw new Error('publicUrl should not be called when recordings.get throws');
       },

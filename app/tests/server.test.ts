@@ -29,6 +29,9 @@ import type { AppConfig } from '../src/config';
 const TEMPLATE = `<!doctype html>
 <html><body><video src="{{PLAYBACK_URL}}"></video></body></html>`;
 
+const LIBRARY_TEMPLATE = `<!doctype html>
+<html><body><script id="library-data" type="application/json">{{RECORDINGS_JSON}}</script></body></html>`;
+
 function buildConfig(dataDir: string): AppConfig {
   return {
     port: 3000,
@@ -66,6 +69,7 @@ describe('bootServer', () => {
     dataDir = path.join(tmpRoot, 'data');
     mkdirSync(viewsDir, { recursive: true });
     writeFileSync(path.join(viewsDir, 'viewer.html'), TEMPLATE, 'utf8');
+    writeFileSync(path.join(viewsDir, 'library.html'), LIBRARY_TEMPLATE, 'utf8');
     cleanups = [];
   });
 

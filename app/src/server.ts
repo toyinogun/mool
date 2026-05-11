@@ -53,9 +53,11 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
   const { app, recordings } = compose({
     db: dbHandle?.db ?? null,
     template: readFileSync(path.join(viewsDir, 'viewer.html'), 'utf8'),
+    libraryTemplate: readFileSync(path.join(viewsDir, 'library.html'), 'utf8'),
     publicAppUrl: config.publicAppUrl,
     mintUploadUrl: r2.mintUploadUrl,
     publicUrl: r2.publicUrl,
+    deleteObject: (key) => r2.deleteObject(key),
     maxUploadBytes: config.maxUploadBytes,
     publicDir,
     authStore,

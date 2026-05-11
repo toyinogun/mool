@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { R2Config } from './config';
 
@@ -35,6 +35,9 @@ export function createR2(cfg: R2Config) {
     },
     publicUrl(key: string): string {
       return `${cfg.publicBaseUrl}/${key}`;
+    },
+    async deleteObject(key: string): Promise<void> {
+      await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }));
     },
   };
 }
