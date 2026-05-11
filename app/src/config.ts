@@ -3,8 +3,6 @@ export interface R2Config {
   secretAccessKey: string;
   bucket: string;
   endpoint: string;
-  /** @deprecated v0.4: no longer consumed; remove in v0.5 once private-bucket migration is confirmed. */
-  publicBaseUrl: string;
 }
 
 export interface ResendConfig {
@@ -81,7 +79,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       secretAccessKey: required('R2_SECRET_ACCESS_KEY'),
       bucket: required('R2_BUCKET'),
       endpoint: urlVar('R2_ENDPOINT'),
-      publicBaseUrl: urlVar('R2_PUBLIC_BASE_URL'),
     },
     resend: {
       apiKey: required('RESEND_API_KEY'),

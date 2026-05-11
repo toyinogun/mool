@@ -44,7 +44,6 @@ function buildConfig(dataDir: string): AppConfig {
       secretAccessKey: 'fake-secret',
       bucket: 'fake-bucket',
       endpoint: 'https://fake.r2.cloudflarestorage.com',
-      publicBaseUrl: 'https://videos.example.com',
     },
     resend: {
       apiKey: 're_test',

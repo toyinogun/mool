@@ -1,21 +1,18 @@
 FROM node:20-alpine
 
-# better-sqlite3 compiles a native addon during install. The build needs
-# python3 + a C++ toolchain. We install them, run npm ci, then drop the
-# build packages to keep the runtime image small.
 WORKDIR /app
 
-RUN apk add --no-cache --virtual .build-deps python3 make g++ \
- && apk add --no-cache tini
+RUN apk add --no-cache tini
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY tsconfig.json ./
 COPY src ./src
+COPY db ./db
+COPY drizzle.config.ts ./
 
-RUN apk del .build-deps \
- && chown -R node:node /app
+RUN chown -R node:node /app
 
 USER node
 

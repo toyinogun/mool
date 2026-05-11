@@ -11,15 +11,17 @@ A self-hosted, browser-based screen recorder.
 
 See `docs/superpowers/specs/2026-05-11-v0.4-accounts-and-postgres-design.md` for the full design.
 
-## Architecture (v0.1–v0.4)
+## Architecture (v0.4)
 
 - Browser captures the screen (`getDisplayMedia` + `MediaRecorder`) and uploads
   the resulting WebM directly to **Cloudflare R2** via a presigned PUT URL.
-- A small **Node/Express** app on this server mints those presigned URLs,
-  generates a 6-character base62 slug, and stores `slug → r2_key` in a SQLite
-  file under `./data/`.
-- Viewers stream playback from R2's public custom domain — the home server is
-  not in the playback byte path.
+- A small **Node/Express** app on this server mints those presigned PUT URLs,
+  generates a 6-character base62 slug, and stores `slug → r2_key` along with
+  user and session data in **Postgres** (a compose service; data mounted at
+  `./data/pg/`).
+- R2 is a **private bucket**. The viewer page requests a short-lived signed-GET
+  URL from the server; the browser streams bytes directly from R2 via that URL —
+  the home server is not in the playback byte path.
 - **Cloudflare Tunnel** exposes the app to the internet. No port forwarding,
   no exposed home IP.
 
@@ -88,7 +90,6 @@ cp .env.example .env
 #   R2_SECRET_ACCESS_KEY=<from step 2>
 #   R2_BUCKET=mool-recordings
 #   R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
-#   R2_PUBLIC_BASE_URL=https://videos.<your-domain>.com
 #   TUNNEL_TOKEN=<from step 3>
 ```
 
@@ -162,11 +163,11 @@ end-to-end testing, run the recorder via the Cloudflare Tunnel hostname.
 mool/
 ├── app/                   # The Node/Express app (see app/src/)
 ├── docker-compose.yml     # app + cloudflared
-├── data/                  # SQLite database (gitignored, created at runtime)
+├── data/pg/               # Postgres data volume (gitignored, created at runtime)
 └── docs/superpowers/      # Specs and plans
 ```
 
-## Cutover from v0.3 → v0.4
+## Cutover from v0.1 → v0.4
 
 This is a fresh-start cutover. **Old share links die.** See spec §10 for the full rollback plan.
 

@@ -7,7 +7,6 @@ const validEnv = {
   R2_SECRET_ACCESS_KEY: 's',
   R2_BUCKET: 'mool-recordings',
   R2_ENDPOINT: 'https://abc.r2.cloudflarestorage.com',
-  R2_PUBLIC_BASE_URL: 'https://videos.example.com',
   DATABASE_URL: 'postgres://mool:pw@db:5432/mool',
   RESEND_API_KEY: 're_test',
   RESEND_FROM: 'auth@example.com',
@@ -70,17 +69,14 @@ describe('loadConfig invariants', () => {
   it('throws when a URL var is malformed', () => {
     expect(() => loadConfig({ ...validEnv, PUBLIC_APP_URL: 'not a url' })).toThrow(/PUBLIC_APP_URL/);
     expect(() => loadConfig({ ...validEnv, R2_ENDPOINT: 'no-scheme.example.com' })).toThrow(/R2_ENDPOINT/);
-    expect(() => loadConfig({ ...validEnv, R2_PUBLIC_BASE_URL: '/relative' })).toThrow(/R2_PUBLIC_BASE_URL/);
   });
 
   it('strips trailing slashes from URL vars so callers can compose paths safely', () => {
     const c = loadConfig({
       ...validEnv,
       PUBLIC_APP_URL: 'https://record.example.com/',
-      R2_PUBLIC_BASE_URL: 'https://videos.example.com///',
     });
     expect(c.publicAppUrl).toBe('https://record.example.com');
-    expect(c.r2.publicBaseUrl).toBe('https://videos.example.com');
   });
 });
 
@@ -89,7 +85,6 @@ describe('v0.4 vars', () => {
     PUBLIC_APP_URL: 'https://record.example.com',
     R2_ACCESS_KEY_ID: 'k', R2_SECRET_ACCESS_KEY: 's', R2_BUCKET: 'b',
     R2_ENDPOINT: 'https://r2.example.com',
-    R2_PUBLIC_BASE_URL: 'https://videos.example.com',
     DATABASE_URL: 'postgres://mool:pw@db:5432/mool',
     RESEND_API_KEY: 're_test',
     RESEND_FROM: 'auth@example.com',
