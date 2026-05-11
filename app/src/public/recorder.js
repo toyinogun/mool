@@ -209,11 +209,14 @@ function suspendInPagePreview() {
 
 /**
  * Reverse `suspendInPagePreview()`. Re-applies the visibility rule from
- * `previewVisible` (which is unchanged across suspend/restore). No-op if
- * the camera has been turned off in the meantime.
+ * `previewVisible` (which is unchanged across suspend/restore). If the
+ * camera was turned off during suspension, clears the flag but skips DOM
+ * updates (nothing to show).
  */
 function restoreInPagePreview() {
   if (!previewSuspended) return;
+  // Clear flag before the cameraStream guard — restore is "no longer
+  // suspended" regardless of whether the DOM gets touched.
   previewSuspended = false;
   if (!cameraStream) return;
   if (previewVisible) {
