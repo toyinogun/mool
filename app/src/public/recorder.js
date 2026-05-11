@@ -224,6 +224,8 @@ async function turnCameraOn() {
   if (myGen !== camGen || !camToggleEl.checked) {
     // User toggled away (or rapid on→off→on) while we were awaiting the
     // permission prompt. Release the stream we just got — we don't own it.
+    // camPipNote needs no reset here: turnCameraOff (or showCamFailure)
+    // ran during the await and already hid it.
     stream.getTracks().forEach((t) => t.stop());
     return;
   }
