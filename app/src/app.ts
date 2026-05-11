@@ -11,6 +11,7 @@ import type { AuthStore } from './auth/authStore';
 import type { EmailSender } from './email/sender';
 import { createUploadRoute } from './routes/createUpload';
 import { viewerRoute } from './routes/viewer';
+import { authRequestLinkRoute } from './routes/authRequestLink';
 import { VIEWER_ROUTE } from './urls';
 
 type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
@@ -35,6 +36,10 @@ export interface AppDeps {
   publicUrl: (key: string) => string;
   /** Absolute path to the static-assets directory, or null in tests. */
   publicDir: string | null;
+  /** Mool's public-facing app URL, e.g. `https://record.example.com`. */
+  publicAppUrl: string;
+  /** How long a magic-link signin token is valid for, in seconds. */
+  signinTokenTtlSeconds: number;
 }
 
 export function createApp(deps: AppDeps): Express {
@@ -54,6 +59,12 @@ export function createApp(deps: AppDeps): Express {
   app.post('/create-upload', asyncRoute(createUploadRoute({
     recordings: deps.recordings,
     maxUploadBytes: deps.maxUploadBytes,
+  })));
+  app.post('/auth/request-link', asyncRoute(authRequestLinkRoute({
+    authStore: deps.authStore,
+    emailSender: deps.emailSender,
+    publicAppUrl: deps.publicAppUrl,
+    signinTokenTtlSeconds: deps.signinTokenTtlSeconds,
   })));
 
   if (deps.publicDir) {

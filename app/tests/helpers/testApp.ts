@@ -31,6 +31,8 @@ export interface BuildTestAppOpts {
   authStore?: AuthStore;
   /** Override the email sender — defaults to a fresh fake. */
   emailSender?: FakeEmailSender;
+  /** Override the signin token TTL in seconds — defaults to 900. */
+  signinTokenTtlSeconds?: number;
 }
 
 export function buildTestApp(opts: BuildTestAppOpts = {}): {
@@ -54,6 +56,7 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
     generateSlug: opts.generateSlug,
     authStore,
     emailSender,
+    signinTokenTtlSeconds: opts.signinTokenTtlSeconds ?? 900,
   });
   return { app, recordings, emailSender, cleanup: () => recordings.close() };
 }

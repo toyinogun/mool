@@ -61,6 +61,7 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
     publicDir,
     authStore,
     emailSender,
+    signinTokenTtlSeconds: config.signinTokenTtlSeconds,
   });
   return { app, recordings, dbHandle };
 }

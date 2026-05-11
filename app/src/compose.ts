@@ -44,6 +44,8 @@ export interface ComposeLeaves {
   authStore: AuthStore;
   /** Email sender — production passes the Resend impl; tests pass the fake. */
   emailSender: EmailSender;
+  /** How long a magic-link signin token is valid for, in seconds. */
+  signinTokenTtlSeconds: number;
 }
 
 export function compose(leaves: ComposeLeaves): { app: Express; recordings: Recordings } {
@@ -63,6 +65,8 @@ export function compose(leaves: ComposeLeaves): { app: Express; recordings: Reco
     renderViewerPage,
     publicUrl: leaves.publicUrl,
     publicDir: leaves.publicDir,
+    publicAppUrl: leaves.publicAppUrl,
+    signinTokenTtlSeconds: leaves.signinTokenTtlSeconds,
   });
   return { app, recordings };
 }

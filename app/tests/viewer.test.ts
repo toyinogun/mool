@@ -88,6 +88,8 @@ describe('GET /v/:slug', () => {
         throw new Error('publicUrl should not be called when recordings.get throws');
       },
       publicDir: null,
+      publicAppUrl: 'https://record.example.com',
+      signinTokenTtlSeconds: 900,
     });
     const res = await request(app).get('/v/abc123');
     expect(res.status).toBe(500);
