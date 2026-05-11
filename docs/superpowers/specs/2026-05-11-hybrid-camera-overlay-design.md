@@ -148,3 +148,28 @@ Manual test plan covers the user-visible matrix:
 ## 10. Open questions
 
 None at design time. All three branching decisions (close-on-visible vs keep-open, manual-close-reopens vs stays-closed, hide-preview-suppresses-PIP vs independent) were resolved with the user during brainstorming.
+
+## 11. Postscript — design abandoned (2026-05-11)
+
+**This design is not viable in pure browser. Do not re-implement.**
+
+The implementation was built on branch `spec/hybrid-camera-overlay` (commits `6272f23` → `d660e18`, never merged) and smoke-tested on Chromium. The first `visibilitychange → hidden` opened the PIP correctly, but the second tab-away (after returning to the Mool tab) failed with:
+
+```
+NotAllowedError: Failed to execute 'requestWindow' on 'DocumentPictureInPicture':
+Document PiP requires user activation
+```
+
+`documentPictureInPicture.requestWindow()` requires fresh **user activation** (a recent click/tap/keypress, ~5 second window in Chromium). The Start-recording click satisfied this for the first programmatic open, but visibility transitions are not user activations and cannot prime the API. Every subsequent visibility-driven open will fail the same way. The §5 "Deliberate non-failures" claim in this spec — "Document PIP doesn't currently require user activation" — was wrong.
+
+This means the strict-hybrid behavior (open on `hidden`, close on `visible`, repeat) cannot be implemented in pure browser. The polish goal (clean in-page bubble while on Mool, PIP-with-chrome only when off-tab) is unreachable from a pure web app.
+
+Reasonable alternatives, not pursued here:
+
+- **Lazy hybrid** (open once on first `hidden`, never close until recording ends): degraded polish but only opens PIP when needed. Still requires the user to tab away within Start's activation window (~5s) or even the first open fails.
+- **Manual "Pop out camera" button** on the Mool tab: a click is fresh activation, so the button always works. Less automatic than Loom-style behavior but reliable.
+- **Browser extension wrapper** for Mool: extensions can inject overlay UI into any page without the user-activation gate. Out of scope for v0.x.
+
+The currently-shipped behavior on `main` (PR #21: PIP always open during camera-on recording, opened by the Start click that has guaranteed activation) is the only reliable approach in pure browser today and is what Mool ships.
+
+If a future browser change relaxes the user-activation requirement on `documentPictureInPicture.requestWindow`, this design becomes implementable as written. Until then, leave it.
