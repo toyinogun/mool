@@ -55,6 +55,10 @@ export function createApp(deps: AppDeps): Express {
   app.use(express.json({ limit: '4kb' }));
   app.use(cookieParser());
 
+  const signinUrl = `${deps.publicAppUrl}/signin`;
+  const requireSessionHtml = requireSession({ authStore: deps.authStore, mode: 'html', signinUrl });
+  const requireSessionJson = requireSession({ authStore: deps.authStore, mode: 'json', signinUrl: '' });
+
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true });
   });
@@ -64,10 +68,14 @@ export function createApp(deps: AppDeps): Express {
     renderViewerPage: deps.renderViewerPage,
     publicUrl: deps.publicUrl,
   })));
-  app.post('/create-upload', asyncRoute(createUploadRoute({
-    recordings: deps.recordings,
-    maxUploadBytes: deps.maxUploadBytes,
-  })));
+  app.post(
+    '/create-upload',
+    requireSessionJson,
+    asyncRoute(createUploadRoute({
+      recordings: deps.recordings,
+      maxUploadBytes: deps.maxUploadBytes,
+    })),
+  );
   app.post('/auth/request-link', asyncRoute(authRequestLinkRoute({
     authStore: deps.authStore,
     emailSender: deps.emailSender,
@@ -79,10 +87,6 @@ export function createApp(deps: AppDeps): Express {
     sessionTtlSeconds: deps.sessionTtlSeconds,
     cookieSecure: deps.cookieSecure,
   })));
-
-  const signinUrl = `${deps.publicAppUrl}/signin`;
-  const requireSessionHtml = requireSession({ authStore: deps.authStore, mode: 'html', signinUrl });
-  const requireSessionJson = requireSession({ authStore: deps.authStore, mode: 'json', signinUrl: '' });
 
   // Gated recorder page — must come before express.static so unauthenticated
   // requests to / are redirected instead of falling through to static.

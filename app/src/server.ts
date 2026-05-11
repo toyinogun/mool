@@ -51,7 +51,6 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
     authStore = createInMemoryAuthStore();
   }
   const { app, recordings } = compose({
-    dbPath: path.join(config.dataDir, 'db.sqlite'),
     db: dbHandle?.db ?? null,
     template: readFileSync(path.join(viewsDir, 'viewer.html'), 'utf8'),
     publicAppUrl: config.publicAppUrl,

@@ -6,6 +6,8 @@ import { createInMemoryAuthStore } from '../src/auth/authStore';
 import { createFakeEmailSender } from '../src/email/sender';
 import type { Recordings } from '../src/recording';
 
+const TEST_USER_ID = 'test-user-id';
+
 describe('GET /v/:slug', () => {
   it('composes the playback URL from publicUrl(r2Key) and embeds it in the HTML', async () => {
     // The route projects Recording → { playbackUrl } per ADR-0015. This is the
@@ -15,7 +17,7 @@ describe('GET /v/:slug', () => {
       generateSlug: () => 'abc123',
     });
     try {
-      await recordings.create({ contentType: 'video/webm', sizeBytes: 1 });
+      await recordings.create({ contentType: 'video/webm', sizeBytes: 1, userId: TEST_USER_ID });
       const res = await request(app).get('/v/abc123');
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toContain('text/html');
@@ -38,7 +40,7 @@ describe('GET /v/:slug', () => {
       },
     });
     try {
-      await recordings.create({ contentType: 'video/webm', sizeBytes: 1 });
+      await recordings.create({ contentType: 'video/webm', sizeBytes: 1, userId: TEST_USER_ID });
       await request(app).get('/v/abc123');
       expect(seenKeys).toEqual(['abc123.webm']);
     } finally {
@@ -73,6 +75,12 @@ describe('GET /v/:slug', () => {
       },
       get: async () => {
         throw new Error('DB exploded');
+      },
+      listForUser: async () => {
+        throw new Error('not exercised in this test');
+      },
+      deleteForUser: async () => {
+        throw new Error('not exercised in this test');
       },
       close: () => {},
     };
