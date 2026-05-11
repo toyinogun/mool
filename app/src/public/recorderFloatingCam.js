@@ -15,9 +15,10 @@
  *
  * Boundary: this module is the only place allowed to touch
  * `window.documentPictureInPicture` or build the bubble's DOM. Callers
- * receive only an opaque `{ close }` handle. The bubble's <video> reuses
- * the existing `.cam-preview` rule from styles.css, carried over by
- * `requestWindow({ copyStyleSheets: true })`.
+ * receive only an opaque `{ close }` handle. The bubble's `<video>` and
+ * Stop button are styled by an inlined `<style>` block in `populate()`
+ * (mirroring the values from styles.css) — `copyStyleSheets` proved
+ * unreliable for linked external stylesheets in current Chrome.
  *
  * Async-but-sync-handle pattern: `openFloatingCam` returns immediately so
  * the synchronous `startCapture` port in recorder.js doesn't have to grow
