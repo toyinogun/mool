@@ -62,6 +62,15 @@ let camGen = 0;
  */
 let composeStop = null;
 
+/**
+ * Cancellation handle for the active floating-camera overlay. Captured in
+ * startCapture() when videoEnabled && cameraStream && floatingCamSupported,
+ * consumed in releaseStream() before capture.release() (and also by the
+ * onCameraEnded callback, see below), and nulled. Null otherwise.
+ * @type {(() => void) | null}
+ */
+let floatingCamStop = null;
+
 const capture = createCapture({
   navigator,
   MediaRecorderCtor: MediaRecorder,
@@ -118,6 +127,11 @@ const ports = {
       composeStop();
       composeStop = null;
     }
+    if (floatingCamStop) {
+      floatingCamStop();
+      floatingCamStop = null;
+    }
+    restoreInPagePreview();
     capture.release();
   },
   requestDisplay: () => capture.requestDisplay(),
@@ -131,6 +145,11 @@ const ports = {
       composeStop = composite.stop;
       composite.onCameraEnded(() => {
         ports.setStatus('Camera disconnected — continuing with screen only.');
+        if (floatingCamStop) {
+          floatingCamStop();
+          floatingCamStop = null;
+          restoreInPagePreview();
+        }
       });
       // capture.start receives the composite stream as its "screen" stream.
       // Audio merging stays in capture (single source of truth for mime
@@ -138,6 +157,35 @@ const ports = {
       // track ending in composeStreams — propagates as TrackEnded via
       // capture's onended wiring on the merged stream's tracks.
       capture.start(composite.compositeStream, audioStream, onTrackEnded);
+
+      // Floating-camera overlay (Document PIP). Skipped on non-Chromium
+      // browsers; failures are non-fatal — the recording is the product,
+      // the bubble is feedback.
+      if (floatingCamSupported) {
+        try {
+          const handle = openFloatingCam({
+            cameraStream,
+            onStopClicked: () => dispatch({ type: 'StopClicked' }),
+            onClosed: () => {
+              floatingCamStop = null;
+              restoreInPagePreview();
+              ports.setStatus('Floating camera closed — recording continues.');
+            },
+            onError: () => {
+              floatingCamStop = null;
+              restoreInPagePreview();
+              ports.setStatus('Floating camera unavailable — recording continues without overlay.');
+            },
+          });
+          floatingCamStop = handle.close;
+          suspendInPagePreview();
+        } catch {
+          // Synchronous throw from openFloatingCam means the API isn't
+          // available. floatingCamSupported guard above should make this
+          // unreachable, but if it isn't, leave the in-page preview alone.
+          ports.setStatus('Floating camera unavailable — recording continues without overlay.');
+        }
+      }
     } else {
       capture.start(stream, audioStream, onTrackEnded);
     }
