@@ -132,3 +132,10 @@ video { width: 100%; max-height: 80vh; border-radius: 8px; background: #000; }
 .link-button:hover {
   color: var(--primary);
 }
+.note {
+  margin: 0.5rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+.note[hidden] { display: none; }
