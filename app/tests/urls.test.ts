@@ -11,6 +11,20 @@ describe('createUrls.viewerUrl', () => {
   });
 });
 
+describe('createUrls.signinUrl', () => {
+  it('builds the absolute sign-in URL', () => {
+    const urls = createUrls({ publicAppUrl: 'https://record.example.com' });
+    expect(urls.signinUrl()).toBe('https://record.example.com/signin');
+  });
+});
+
+describe('createUrls.libraryUrl', () => {
+  it('builds the absolute library URL', () => {
+    const urls = createUrls({ publicAppUrl: 'https://record.example.com' });
+    expect(urls.libraryUrl()).toBe('https://record.example.com/library');
+  });
+});
+
 describe('VIEWER_ROUTE / viewerUrl coupling', () => {
   // The whole reason urls.ts exists: pin the contract between the route
   // template `app.ts` mounts and the path shape `viewerUrl` produces. If

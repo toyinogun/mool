@@ -5,9 +5,20 @@ import express, {
   type NextFunction,
   type RequestHandler,
 } from 'express';
+import cookieParser from 'cookie-parser';
 import type { Recordings } from './recording';
+import type { AuthStore } from './auth/authStore';
+import type { EmailSender } from './email/sender';
 import { createUploadRoute } from './routes/createUpload';
 import { viewerRoute } from './routes/viewer';
+import { authRequestLinkRoute } from './routes/authRequestLink';
+import { authCallbackRoute } from './routes/authCallback';
+import { authSignoutRoute } from './routes/authSignout';
+import { meRoute } from './routes/me';
+import { listRecordingsRoute } from './routes/listRecordings';
+import { deleteRecordingRoute } from './routes/deleteRecording';
+import { libraryPageRoute } from './routes/libraryPage';
+import { requireSession } from './auth/requireSession';
 import { VIEWER_ROUTE } from './urls';
 
 type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
@@ -24,34 +35,104 @@ export function asyncRoute(fn: AsyncHandler): RequestHandler {
 
 export interface AppDeps {
   recordings: Recordings;
+  authStore: AuthStore;
+  emailSender: EmailSender;
   maxUploadBytes: number;
   renderViewerPage: (inputs: { playbackUrl: string }) => string;
-  /** Builds the public URL where R2 serves a stored object's bytes. See ADR-0015. */
-  publicUrl: (key: string) => string;
+  /** Renders the Library page HTML from its template. */
+  renderLibraryPage: (inputs: { recordingsJson: string }) => string;
+  /** Deletes an R2 object by key. */
+  deleteObject: (key: string) => Promise<void>;
+  /** Mints a short-lived signed-GET URL for viewing a stored object. */
+  mintViewUrl: (args: { key: string; ttlSeconds: number }) => Promise<string>;
+  /** How long a signed viewer URL is valid for, in seconds. */
+  viewUrlTtlSeconds: number;
   /** Absolute path to the static-assets directory, or null in tests. */
   publicDir: string | null;
+  /** Mool's public-facing app URL, e.g. `https://record.example.com`. */
+  publicAppUrl: string;
+  /** How long a magic-link signin token is valid for, in seconds. */
+  signinTokenTtlSeconds: number;
+  /** How long a session cookie is valid for, in seconds. */
+  sessionTtlSeconds: number;
+  /** Whether to set the Secure flag on the session cookie. */
+  cookieSecure: boolean;
+  /** Checks DB liveness — returns true if healthy, false/throws if not. */
+  dbHealth: () => Promise<boolean>;
 }
 
 export function createApp(deps: AppDeps): Express {
   const app = express();
   app.use(express.json({ limit: '4kb' }));
+  app.use(cookieParser());
 
-  app.get('/healthz', (_req, res) => {
-    res.json({ ok: true });
+  const signinUrl = `${deps.publicAppUrl}/signin`;
+  const requireSessionHtml = requireSession({ authStore: deps.authStore, mode: 'html', signinUrl });
+  const requireSessionJson = requireSession({ authStore: deps.authStore, mode: 'json', signinUrl: '' });
+
+  app.get('/healthz', async (_req, res) => {
+    try {
+      const ok = await deps.dbHealth();
+      res.status(ok ? 200 : 503).json({ ok });
+    } catch {
+      res.status(503).json({ ok: false });
+    }
   });
 
   app.get(VIEWER_ROUTE, asyncRoute(viewerRoute({
     recordings: deps.recordings,
     renderViewerPage: deps.renderViewerPage,
-    publicUrl: deps.publicUrl,
+    mintViewUrl: deps.mintViewUrl,
+    viewUrlTtlSeconds: deps.viewUrlTtlSeconds,
   })));
-  app.post('/create-upload', asyncRoute(createUploadRoute({
-    recordings: deps.recordings,
-    maxUploadBytes: deps.maxUploadBytes,
+  app.post(
+    '/create-upload',
+    requireSessionJson,
+    asyncRoute(createUploadRoute({
+      recordings: deps.recordings,
+      maxUploadBytes: deps.maxUploadBytes,
+    })),
+  );
+  app.post('/auth/request-link', asyncRoute(authRequestLinkRoute({
+    authStore: deps.authStore,
+    emailSender: deps.emailSender,
+    publicAppUrl: deps.publicAppUrl,
+    signinTokenTtlSeconds: deps.signinTokenTtlSeconds,
+  })));
+  app.get('/auth/callback', asyncRoute(authCallbackRoute({
+    authStore: deps.authStore,
+    sessionTtlSeconds: deps.sessionTtlSeconds,
+    cookieSecure: deps.cookieSecure,
   })));
 
+  // Gated recorder page — must come before express.static so unauthenticated
+  // requests to / are redirected instead of falling through to static.
+  app.get('/', requireSessionHtml, (_req, res, next) => {
+    if (!deps.publicDir) return next();
+    res.sendFile('index.html', { root: deps.publicDir });
+  });
+
+  app.post('/auth/signout', asyncRoute(authSignoutRoute({
+    authStore: deps.authStore,
+    cookieSecure: deps.cookieSecure,
+  })));
+  app.get('/me', requireSessionJson, meRoute());
+
+  app.get('/library', requireSessionHtml, asyncRoute(libraryPageRoute({
+    recordings: deps.recordings,
+    renderLibraryPage: deps.renderLibraryPage,
+  })));
+  app.get('/api/recordings', requireSessionJson, asyncRoute(listRecordingsRoute({
+    recordings: deps.recordings,
+  })));
+  app.delete('/recordings/:slug', requireSessionJson, asyncRoute(deleteRecordingRoute({
+    recordings: deps.recordings,
+    deleteObject: deps.deleteObject,
+  })));
+
+  // Static middleware — serves all assets except index.html so / is gated above.
   if (deps.publicDir) {
-    app.use(express.static(deps.publicDir));
+    app.use(express.static(deps.publicDir, { index: false }));
   }
 
   app.use(

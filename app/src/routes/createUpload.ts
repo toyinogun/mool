@@ -40,6 +40,14 @@ function toWire(created: CreatedRecording): CreateUploadResponse {
 
 export function createUploadRoute(deps: CreateUploadDeps) {
   return async (req: Request, res: Response): Promise<void> => {
+    // requireSession middleware should have attached req.user
+    const userId = req.user?.id;
+    if (!userId) {
+      // defensive guard — should be unreachable behind requireSession
+      res.status(401).json({ error: 'unauthenticated' });
+      return;
+    }
+
     const body = req.body ?? {};
 
     const sizeBytes = body.sizeBytes;
@@ -66,6 +74,7 @@ export function createUploadRoute(deps: CreateUploadDeps) {
       created = await deps.recordings.create({
         contentType: body.contentType,
         sizeBytes,
+        userId,
       });
     } catch (err) {
       if (err instanceof UnsupportedContentTypeError) {

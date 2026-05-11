@@ -8,7 +8,7 @@ import { ALLOWED_MIME, type AllowedMime } from '../src/recording';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — JSDoc-typed JS module shipped to the browser as well.
 import { pickMimeType } from '../src/public/recorderCapture.js';
-import { buildTestApp } from './helpers/testApp';
+import { buildTestApp, signedInCookie } from './helpers/testApp';
 
 describe('ALLOWED_MIME contract', () => {
   it('is the shared source of truth for accepted recorder content types', () => {
@@ -85,10 +85,12 @@ describe('pickMimeType output is a subset of ALLOWED_MIME', () => {
 
 describe('POST /create-upload wire contract', () => {
   it('success response contains exactly { slug, uploadUrl, viewerUrl }', async () => {
-    const { app, cleanup } = buildTestApp();
+    const { app, authStore, cleanup } = buildTestApp();
     try {
+      const cookie = await signedInCookie(authStore);
       const res = await request(app)
         .post('/create-upload')
+        .set('Cookie', cookie)
         .send({ contentType: 'video/webm', sizeBytes: 100 });
 
       expect(res.status).toBe(200);
@@ -116,12 +118,27 @@ describe('POST /create-upload wire contract', () => {
     ];
     const observed = new Set<string>();
 
-    // invalid_content_type
+    // unauthenticated — not a CreateUploadErrorCode but we verify it returns 401
     {
       const { app, cleanup } = buildTestApp();
       try {
         const res = await request(app)
           .post('/create-upload')
+          .send({ contentType: 'video/webm', sizeBytes: 100 });
+        expect(res.status).toBe(401);
+      } finally {
+        cleanup();
+      }
+    }
+
+    // invalid_content_type
+    {
+      const { app, authStore, cleanup } = buildTestApp();
+      try {
+        const cookie = await signedInCookie(authStore);
+        const res = await request(app)
+          .post('/create-upload')
+          .set('Cookie', cookie)
           .send({ contentType: 'video/mp4', sizeBytes: 100 });
         observed.add(res.body.error);
       } finally {
@@ -131,10 +148,12 @@ describe('POST /create-upload wire contract', () => {
 
     // invalid_size_bytes
     {
-      const { app, cleanup } = buildTestApp();
+      const { app, authStore, cleanup } = buildTestApp();
       try {
+        const cookie = await signedInCookie(authStore);
         const res = await request(app)
           .post('/create-upload')
+          .set('Cookie', cookie)
           .send({ contentType: 'video/webm' });
         observed.add(res.body.error);
       } finally {
@@ -144,10 +163,12 @@ describe('POST /create-upload wire contract', () => {
 
     // file_too_large
     {
-      const { app, cleanup } = buildTestApp({ maxUploadBytes: 1 });
+      const { app, authStore, cleanup } = buildTestApp({ maxUploadBytes: 1 });
       try {
+        const cookie = await signedInCookie(authStore);
         const res = await request(app)
           .post('/create-upload')
+          .set('Cookie', cookie)
           .send({ contentType: 'video/webm', sizeBytes: 1024 });
         observed.add(res.body.error);
       } finally {
@@ -157,14 +178,16 @@ describe('POST /create-upload wire contract', () => {
 
     // upload_mint_failed (via R2 throwing after the row is written; ADR-0009)
     {
-      const { app, cleanup } = buildTestApp({
+      const { app, authStore, cleanup } = buildTestApp({
         mintUploadUrl: async () => {
           throw new Error('R2 unavailable');
         },
       });
       try {
+        const cookie = await signedInCookie(authStore);
         const res = await request(app)
           .post('/create-upload')
+          .set('Cookie', cookie)
           .send({ contentType: 'video/webm', sizeBytes: 100 });
         observed.add(res.body.error);
       } finally {
@@ -176,14 +199,16 @@ describe('POST /create-upload wire contract', () => {
     // global handler in app.ts; the route itself never emits this code — see
     // ADR-0006 — but the wire surface clients see does include it).
     {
-      const { app, recordings, cleanup } = buildTestApp({
+      const { app, recordings, authStore, cleanup } = buildTestApp({
         generateSlug: () => 'always',
       });
       try {
+        const cookie = await signedInCookie(authStore);
         // Pre-claim the slug; the next /create-upload then exhausts retries.
-        await recordings.create({ contentType: 'video/webm', sizeBytes: 1 });
+        await recordings.create({ contentType: 'video/webm', sizeBytes: 1, userId: 'seed-user' });
         const res = await request(app)
           .post('/create-upload')
+          .set('Cookie', cookie)
           .send({ contentType: 'video/webm', sizeBytes: 100 });
         expect(res.status).toBe(500);
         observed.add(res.body.error);

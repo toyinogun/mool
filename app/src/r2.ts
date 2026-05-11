@@ -1,8 +1,14 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { R2Config } from './config';
 
-export function createR2(cfg: R2Config) {
+export interface R2 {
+  mintUploadUrl(args: { key: string; contentType: string; sizeBytes: number }): Promise<string>;
+  mintViewUrl(args: { key: string; ttlSeconds: number }): Promise<string>;
+  deleteObject(key: string): Promise<void>;
+}
+
+export function createR2(cfg: R2Config): R2 {
   const client = new S3Client({
     region: 'auto',
     endpoint: cfg.endpoint,
@@ -33,8 +39,11 @@ export function createR2(cfg: R2Config) {
       // short enough that a leaked URL is not durably abusable.
       return getSignedUrl(client, cmd, { expiresIn: 60 * 15 });
     },
-    publicUrl(key: string): string {
-      return `${cfg.publicBaseUrl}/${key}`;
+    async mintViewUrl({ key, ttlSeconds }: { key: string; ttlSeconds: number }): Promise<string> {
+      return getSignedUrl(client, new GetObjectCommand({ Bucket: cfg.bucket, Key: key }), { expiresIn: ttlSeconds });
+    },
+    async deleteObject(key: string): Promise<void> {
+      await client.send(new DeleteObjectCommand({ Bucket: cfg.bucket, Key: key }));
     },
   };
 }

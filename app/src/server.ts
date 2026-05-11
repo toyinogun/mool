@@ -4,7 +4,12 @@ import type { Express } from 'express';
 import { loadConfig, type AppConfig } from './config';
 import { createR2 } from './r2';
 import { compose } from './compose';
+import { createDb, runMigrations, type DbHandle } from './db/client';
+import { createPostgresAuthStore, createInMemoryAuthStore, type AuthStore } from './auth/authStore';
+import { createResendSender } from './email/sender';
 import type { Recordings } from './recording';
+import { startCleanupLoop, type CleanupLoop } from './cleanup';
+import { sql } from 'drizzle-orm';
 
 export interface BootServerOpts {
   config: AppConfig;
@@ -12,6 +17,8 @@ export interface BootServerOpts {
   viewsDir: string;
   /** Directory of static assets to serve, or `null` to skip the static handler. */
   publicDir: string | null;
+  /** When true, skip both db construction and migration. Used by tests that don't exercise the data layer. */
+  skipDb?: boolean;
 }
 
 /**
@@ -23,31 +30,69 @@ export interface BootServerOpts {
  * a child process — the production entry point under `if (require.main === module)`
  * is the only caller in production.
  */
-export function bootServer({ config, viewsDir, publicDir }: BootServerOpts): {
+export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootServerOpts): Promise<{
   app: Express;
   recordings: Recordings;
-} {
+  dbHandle: DbHandle | null;
+  cleanup: CleanupLoop | null;
+}> {
   mkdirSync(config.dataDir, { recursive: true });
+  let dbHandle: DbHandle | null = null;
+  if (!skipDb) {
+    dbHandle = createDb(config.databaseUrl);
+    await runMigrations(dbHandle.db, path.join(__dirname, '..', 'db', 'migrations'));
+  }
   const r2 = createR2(config.r2);
-  return compose({
-    dbPath: path.join(config.dataDir, 'db.sqlite'),
+  const emailSender = createResendSender({ apiKey: config.resend.apiKey, from: config.resend.from });
+  let authStore: AuthStore;
+  if (dbHandle) {
+    authStore = createPostgresAuthStore({ db: dbHandle.db });
+  } else {
+    if (!skipDb) {
+      throw new Error('authStore: dbHandle is null but skipDb is false — check DATABASE_URL');
+    }
+    authStore = createInMemoryAuthStore();
+  }
+  const dbHealth = async (): Promise<boolean> => {
+    if (!dbHandle) return false;
+    await dbHandle.db.execute(sql`SELECT 1`);
+    return true;
+  };
+  const { app, recordings } = compose({
+    db: dbHandle?.db ?? null,
     template: readFileSync(path.join(viewsDir, 'viewer.html'), 'utf8'),
+    libraryTemplate: readFileSync(path.join(viewsDir, 'library.html'), 'utf8'),
     publicAppUrl: config.publicAppUrl,
     mintUploadUrl: r2.mintUploadUrl,
-    publicUrl: r2.publicUrl,
+    mintViewUrl: r2.mintViewUrl,
+    viewUrlTtlSeconds: config.viewUrlTtlSeconds,
+    deleteObject: (key) => r2.deleteObject(key),
     maxUploadBytes: config.maxUploadBytes,
     publicDir,
+    authStore,
+    emailSender,
+    signinTokenTtlSeconds: config.signinTokenTtlSeconds,
+    sessionTtlSeconds: config.sessionTtlSeconds,
+    cookieSecure: config.cookieSecure,
+    dbHealth,
   });
+  const cleanup = skipDb ? null : startCleanupLoop({ authStore });
+  return { app, recordings, dbHandle, cleanup };
 }
 
 if (require.main === module) {
-  const config = loadConfig();
-  const { app } = bootServer({
-    config,
-    viewsDir: path.join(__dirname, 'views'),
-    publicDir: path.join(__dirname, 'public'),
-  });
-  app.listen(config.port, () => {
-    console.log(`Mool listening on :${config.port}`);
+  (async () => {
+    const config = loadConfig();
+    const { app } = await bootServer({
+      config,
+      viewsDir: path.join(__dirname, 'views'),
+      publicDir: path.join(__dirname, 'public'),
+    });
+    app.listen(config.port, () => {
+      console.log(`Mool listening on :${config.port}`);
+    });
+  })().catch((err) => {
+    console.error('Fatal boot error:', err);
+    process.exit(1);
   });
 }

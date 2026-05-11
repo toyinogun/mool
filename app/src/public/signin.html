@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sign in · Mool</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="signin-page">
+  <main class="signin-card">
+    <h1>Sign in to Mool</h1>
+    <p>Enter your email and we'll send you a one-time sign-in link. Valid for 15 minutes.</p>
+    <form id="signin-form">
+      <input type="email" id="email" name="email" required autocomplete="email" placeholder="you@example.com">
+      <button type="submit">Send link</button>
+    </form>
+    <p id="signin-status" class="signin-status" hidden></p>
+  </main>
+  <script type="module" src="/signin.js"></script>
+</body>
+</html>

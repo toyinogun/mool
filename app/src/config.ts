@@ -3,7 +3,11 @@ export interface R2Config {
   secretAccessKey: string;
   bucket: string;
   endpoint: string;
-  publicBaseUrl: string;
+}
+
+export interface ResendConfig {
+  apiKey: string;
+  from: string;
 }
 
 export interface AppConfig {
@@ -11,7 +15,13 @@ export interface AppConfig {
   dataDir: string;
   maxUploadBytes: number;
   publicAppUrl: string;
+  databaseUrl: string;
   r2: R2Config;
+  resend: ResendConfig;
+  signinTokenTtlSeconds: number;
+  sessionTtlSeconds: number;
+  viewUrlTtlSeconds: number;
+  cookieSecure: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -43,17 +53,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     return v;
   };
 
-  // Validates with the URL parser (catches typos like missing scheme) and
-  // strips trailing slashes so callers can compose paths via `${base}/${seg}`
-  // without thinking about doubled slashes.
   const urlVar = (name: string): string => {
     const raw = required(name);
-    try {
-      new URL(raw);
-    } catch {
-      throw new Error(`Env var ${name} must be a valid URL, got: ${raw}`);
-    }
+    try { new URL(raw); }
+    catch { throw new Error(`Env var ${name} must be a valid URL, got: ${raw}`); }
     return raw.replace(/\/+$/, '');
+  };
+
+  const boolVar = (name: string, fallback: boolean): boolean => {
+    const raw = env[name];
+    if (raw === undefined || raw === '') return fallback;
+    if (raw === 'true') return true;
+    if (raw === 'false') return false;
+    throw new Error(`Env var ${name} must be "true" or "false", got: ${raw}`);
   };
 
   return {
@@ -61,12 +73,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     dataDir: env.DATA_DIR ?? './data',
     maxUploadBytes: positiveIntVar('MAX_UPLOAD_BYTES', 524_288_000),
     publicAppUrl: urlVar('PUBLIC_APP_URL'),
+    databaseUrl: required('DATABASE_URL'),
     r2: {
       accessKeyId: required('R2_ACCESS_KEY_ID'),
       secretAccessKey: required('R2_SECRET_ACCESS_KEY'),
       bucket: required('R2_BUCKET'),
       endpoint: urlVar('R2_ENDPOINT'),
-      publicBaseUrl: urlVar('R2_PUBLIC_BASE_URL'),
     },
+    resend: {
+      apiKey: required('RESEND_API_KEY'),
+      from: required('RESEND_FROM'),
+    },
+    signinTokenTtlSeconds: positiveIntVar('SIGNIN_TOKEN_TTL_SECONDS', 900),
+    sessionTtlSeconds: positiveIntVar('SESSION_TTL_SECONDS', 2592000),
+    viewUrlTtlSeconds: positiveIntVar('VIEW_URL_TTL_SECONDS', 3600),
+    cookieSecure: boolVar('COOKIE_SECURE', true),
   };
 }

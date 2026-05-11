@@ -29,19 +29,30 @@ import type { AppConfig } from '../src/config';
 const TEMPLATE = `<!doctype html>
 <html><body><video src="{{PLAYBACK_URL}}"></video></body></html>`;
 
+const LIBRARY_TEMPLATE = `<!doctype html>
+<html><body><script id="library-data" type="application/json">{{RECORDINGS_JSON}}</script></body></html>`;
+
 function buildConfig(dataDir: string): AppConfig {
   return {
     port: 3000,
     dataDir,
     maxUploadBytes: 500 * 1024 * 1024,
     publicAppUrl: 'https://record.example.com',
+    databaseUrl: 'postgres://test',
     r2: {
       accessKeyId: 'fake-key',
       secretAccessKey: 'fake-secret',
       bucket: 'fake-bucket',
       endpoint: 'https://fake.r2.cloudflarestorage.com',
-      publicBaseUrl: 'https://videos.example.com',
     },
+    resend: {
+      apiKey: 're_test',
+      from: 'auth@example.com',
+    },
+    signinTokenTtlSeconds: 900,
+    sessionTtlSeconds: 2592000,
+    viewUrlTtlSeconds: 3600,
+    cookieSecure: true,
   };
 }
 
@@ -57,6 +68,7 @@ describe('bootServer', () => {
     dataDir = path.join(tmpRoot, 'data');
     mkdirSync(viewsDir, { recursive: true });
     writeFileSync(path.join(viewsDir, 'viewer.html'), TEMPLATE, 'utf8');
+    writeFileSync(path.join(viewsDir, 'library.html'), LIBRARY_TEMPLATE, 'utf8');
     cleanups = [];
   });
 
@@ -66,50 +78,55 @@ describe('bootServer', () => {
   });
 
   it('boots successfully and serves /healthz', async () => {
-    const { app, recordings } = bootServer({
+    const { app, recordings } = await bootServer({
       config: buildConfig(dataDir),
       viewsDir,
       publicDir: null,
+      skipDb: true,
     });
     cleanups.push(() => recordings.close());
 
     const res = await request(app).get('/healthz');
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
+    // skipDb=true → no dbHandle → dbHealth returns false → 503
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ ok: false });
   });
 
-  it('creates the data directory if it does not exist', () => {
+  it('creates the data directory if it does not exist', async () => {
     const nested = path.join(tmpRoot, 'does', 'not', 'exist', 'yet');
     expect(existsSync(nested)).toBe(false);
 
-    const { recordings } = bootServer({
+    const { recordings } = await bootServer({
       config: buildConfig(nested),
       viewsDir,
       publicDir: null,
+      skipDb: true,
     });
     cleanups.push(() => recordings.close());
 
     expect(existsSync(nested)).toBe(true);
   });
 
-  it('throws ENOENT when viewer.html is missing from viewsDir', () => {
+  it('throws ENOENT when viewer.html is missing from viewsDir', async () => {
     const emptyViewsDir = path.join(tmpRoot, 'empty-views');
     mkdirSync(emptyViewsDir);
 
-    expect(() =>
+    await expect(
       bootServer({
         config: buildConfig(dataDir),
         viewsDir: emptyViewsDir,
         publicDir: null,
+        skipDb: true,
       }),
-    ).toThrow(/ENOENT.*viewer\.html/);
+    ).rejects.toThrow(/ENOENT.*viewer\.html/);
   });
 
   it('mounts the Viewer route through the real wiring (404 for unknown slug)', async () => {
-    const { app, recordings } = bootServer({
+    const { app, recordings } = await bootServer({
       config: buildConfig(dataDir),
       viewsDir,
       publicDir: null,
+      skipDb: true,
     });
     cleanups.push(() => recordings.close());
 

@@ -4,8 +4,20 @@ A self-hosted, browser-based screen recorder. Captures the screen in the browser
 
 ## Language
 
+**User**:
+An authenticated principal, identified by an email address. Owns Recordings. Identified in the data layer by a UUID (`users.id`). Display name is auto-derived from the email local-part on first sign-in (e.g. `alice` from `alice@example.com`) and is not currently editable.
+_Avoid_: account, member, owner
+
+**Session**:
+An authenticated browser-side handle on a User. Identified by a random 32-byte token (the secret); stored as its SHA-256 hash in the `sessions` table. Carried in the `mool_session` cookie (`HttpOnly`, `SameSite=Lax`). Expires after 30 days.
+_Avoid_: auth token, login
+
+**Signin token**:
+A one-time token — 32 random bytes, base64url-encoded — valid for 15 minutes. Sent inside the magic-link email as a query parameter; consumed on the user's first click, which creates a Session. Only the most recently issued token for a given email is valid (earlier ones are invalidated on issue).
+_Avoid_: magic link (that is the email URL containing the token), login link
+
 **Recording**:
-A captured screen video, identified by a unique slug. Has two physical manifestations — a row in SQLite (metadata) and an object in R2 (bytes) — but is one conceptual thing. A Recording exists once both manifestations are persisted; the in-browser state before that is a **Capture**.
+A captured screen video, identified by a unique slug. Owned by exactly one User. Has two physical manifestations — a row in Postgres (metadata, including `user_id`) and an object in R2 (bytes) — but is one conceptual thing. A Recording exists once both manifestations are persisted; the in-browser state before that is a **Capture**.
 _Avoid_: video, clip, asset
 
 **Capture**:
@@ -43,9 +55,12 @@ _Avoid_: watch page, playback page
 ## Relationships
 
 - A **Recording** is identified by exactly one **Slug**
+- A **Recording** is owned by exactly one **User**
 - A **Recording**'s bytes live at exactly one **R2 key**
+- A **User** may have many **Sessions**; each **Session** identifies exactly one **User**
+- A **Signin token** is issued to an email address and becomes a **Session** on first use
 - The **Recorder page** produces an **Upload URL** and a **Viewer URL** when a Recording is created
-- The **Viewer page** resolves a **Slug** to its **Playback URL**
+- The **Viewer page** resolves a **Slug** to its **Playback URL** (a signed-GET URL, short-lived)
 
 ## Example dialogue
 

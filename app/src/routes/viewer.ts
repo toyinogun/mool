@@ -4,8 +4,8 @@ import type { Recording, Recordings } from '../recording';
 export interface ViewerDeps {
   recordings: Recordings;
   renderViewerPage: (inputs: { playbackUrl: string }) => string;
-  /** Builds the public URL where R2 serves a stored object's bytes. See ADR-0015. */
-  publicUrl: (key: string) => string;
+  mintViewUrl: (args: { key: string; ttlSeconds: number }) => Promise<string>;
+  viewUrlTtlSeconds: number;
 }
 
 export function viewerRoute(deps: ViewerDeps) {
@@ -26,7 +26,14 @@ export function viewerRoute(deps: ViewerDeps) {
       res.status(404).type('text/plain').send('Not found');
       return;
     }
-    const playbackUrl = deps.publicUrl(recording.r2Key);
+    let playbackUrl: string;
+    try {
+      playbackUrl = await deps.mintViewUrl({ key: recording.r2Key, ttlSeconds: deps.viewUrlTtlSeconds });
+    } catch (err) {
+      console.error('mintViewUrl failed:', err);
+      res.status(502).type('text/plain').send('Recording temporarily unavailable');
+      return;
+    }
     const html = deps.renderViewerPage({ playbackUrl });
     res.set('Content-Type', 'text/html; charset=utf-8').send(html);
   };

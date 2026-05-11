@@ -139,3 +139,190 @@ video { width: 100%; max-height: 80vh; border-radius: 8px; background: #000; }
   font-style: italic;
 }
 .note[hidden] { display: none; }
+
+/* ---- Header chrome ---- */
+
+.mool-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.25rem;
+  background: rgba(14, 17, 22, 0.92);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+  z-index: 100;
+}
+
+.mool-header-brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: -0.02em;
+  color: var(--fg);
+}
+
+.mool-header-nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mool-header-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+.mool-header-nav a:hover { color: var(--fg); }
+
+#mool-user-display {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.mool-signout-form { margin: 0; }
+.mool-signout-form button {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.85rem;
+  border-radius: 4px;
+}
+
+/* Push body content below fixed header */
+body:has(.mool-header) .container {
+  padding-top: 3.5rem;
+}
+
+/* ---- Sign-in page ---- */
+
+.signin-page {
+  align-items: center;
+  justify-content: center;
+}
+
+.signin-card {
+  width: min(400px, 100% - 2rem);
+  text-align: center;
+  padding: 2.5rem 2rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #161b22;
+}
+
+.signin-card h1 {
+  font-size: 1.75rem;
+  margin: 0 0 0.5rem;
+}
+
+.signin-card p {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+  line-height: 1.5;
+}
+
+.signin-card input[type="email"] {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
+  margin-bottom: 0.75rem;
+}
+.signin-card input[type="email"]:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.signin-card button[type="submit"] {
+  width: 100%;
+  background: var(--primary);
+  border-color: var(--primary);
+  padding: 0.65rem 1rem;
+}
+.signin-card button[type="submit"]:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.signin-status {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+.signin-status[hidden] { display: none; }
+
+/* ---- Library page ---- */
+
+.library-page {
+  display: block;
+  align-items: unset;
+  justify-content: unset;
+}
+
+.library-page main {
+  max-width: 860px;
+  margin: 4.5rem auto 2rem;
+  padding: 0 1.25rem;
+}
+
+.library-page h1 {
+  font-size: 1.75rem;
+  margin: 0 0 1.5rem;
+}
+
+#library-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+#library-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #161b22;
+  flex-wrap: wrap;
+}
+
+.lib-date {
+  color: var(--muted);
+  font-size: 0.85rem;
+  min-width: 10rem;
+}
+
+.lib-link {
+  flex: 1;
+  color: var(--fg);
+  text-decoration: none;
+  font-family: monospace;
+  font-size: 0.95rem;
+  word-break: break-all;
+}
+.lib-link:hover { color: var(--primary); }
+
+.lib-copy,
+.lib-delete {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
+  border-radius: 4px;
+}
+
+.lib-delete {
+  color: #f85149;
+  border-color: #f85149;
+}
+.lib-delete:hover {
+  background: rgba(248, 81, 73, 0.12);
+}

@@ -1,10 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
-  createRecordings,
+  createInMemoryRecordings,
   SlugGenerationExhaustedError,
   UnsupportedContentTypeError,
   UploadMintFailedError,
 } from '../src/recording';
+
 function fakeR2() {
   return {
     async mintUploadUrl({ key }: { key: string; contentType: string; sizeBytes: number }) {
@@ -15,11 +16,11 @@ function fakeR2() {
 
 const PUBLIC_APP_URL = 'https://record.example.com';
 const viewerUrlFor = (slug: string): string => `${PUBLIC_APP_URL}/v/${slug}`;
+const TEST_USER_ID = 'test-user-id';
 
-describe('createRecordings.create', () => {
+describe('createInMemoryRecordings.create', () => {
   it('returns slug, uploadUrl, and viewerUrl', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -27,6 +28,7 @@ describe('createRecordings.create', () => {
     const result = await recordings.create({
       contentType: 'video/webm',
       sizeBytes: 12_345,
+      userId: TEST_USER_ID,
     });
 
     expect(result.slug).toMatch(/^[A-Za-z0-9]{6}$/);
@@ -36,8 +38,7 @@ describe('createRecordings.create', () => {
   });
 
   it("persists the recording with r2Key '<slug>.webm' so the route can compose its playback URL", async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -45,6 +46,7 @@ describe('createRecordings.create', () => {
     const { slug } = await recordings.create({
       contentType: 'video/webm',
       sizeBytes: 100,
+      userId: TEST_USER_ID,
     });
 
     const recording = await recordings.get(slug);
@@ -56,8 +58,7 @@ describe('createRecordings.create', () => {
 
   it('forwards the caller-provided contentType to R2', async () => {
     const seenContentTypes: string[] = [];
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       mintUploadUrl: async ({ key, contentType }) => {
         seenContentTypes.push(contentType);
@@ -69,6 +70,7 @@ describe('createRecordings.create', () => {
     await recordings.create({
       contentType: 'video/webm;codecs=vp9',
       sizeBytes: 100,
+      userId: TEST_USER_ID,
     });
 
     expect(seenContentTypes).toEqual(['video/webm;codecs=vp9']);
@@ -76,16 +78,15 @@ describe('createRecordings.create', () => {
   });
 });
 
-describe('createRecordings.create content-type validation', () => {
+describe('createInMemoryRecordings.create content-type validation', () => {
   it('rejects a contentType outside ALLOWED_MIME with UnsupportedContentTypeError', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
 
     const err = await recordings
-      .create({ contentType: 'video/mp4', sizeBytes: 1 })
+      .create({ contentType: 'video/mp4', sizeBytes: 1, userId: TEST_USER_ID })
       .then(
         () => {
           throw new Error('expected create to reject');
@@ -101,36 +102,35 @@ describe('createRecordings.create content-type validation', () => {
   });
 
   it('accepts video/webm;codecs=vp9 (canonical AllowedMime literal)', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
     const result = await recordings.create({
       contentType: 'video/webm;codecs=vp9',
       sizeBytes: 1,
+      userId: TEST_USER_ID,
     });
     expect(result.slug).toMatch(/^[A-Za-z0-9]{6}$/);
     recordings.close();
   });
 
   it('accepts video/webm;codecs=vp9,opus (v0.2 mic-enabled literal)', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
     const result = await recordings.create({
       contentType: 'video/webm;codecs=vp9,opus',
       sizeBytes: 1,
+      userId: TEST_USER_ID,
     });
     expect(result.slug).toMatch(/^[A-Za-z0-9]{6}$/);
     recordings.close();
   });
 
   it('normalizes case and whitespace before validating', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -139,16 +139,16 @@ describe('createRecordings.create content-type validation', () => {
     const result = await recordings.create({
       contentType: 'Video/WebM; codecs=vp9',
       sizeBytes: 1,
+      userId: TEST_USER_ID,
     });
     expect(result.slug).toMatch(/^[A-Za-z0-9]{6}$/);
     recordings.close();
   });
 });
 
-describe('createRecordings.get', () => {
+describe('createInMemoryRecordings.get', () => {
   it('returns a Promise (locks in pre-v0.4 async shape for presigned-GET migration)', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -160,8 +160,7 @@ describe('createRecordings.get', () => {
   });
 
   it('returns the stored Recording fields for a known slug', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
       generateSlug: () => 'abc123',
@@ -169,6 +168,7 @@ describe('createRecordings.get', () => {
     await recordings.create({
       contentType: 'video/webm;codecs=vp9',
       sizeBytes: 1,
+      userId: TEST_USER_ID,
     });
 
     const got = await recordings.get('abc123');
@@ -177,13 +177,13 @@ describe('createRecordings.get', () => {
     expect(got!.slug).toBe('abc123');
     expect(got!.r2Key).toBe('abc123.webm');
     expect(got!.mimeType).toBe('video/webm;codecs=vp9');
-    expect(typeof got!.createdAt).toBe('number');
+    expect(got!.userId).toBe(TEST_USER_ID);
+    expect(got!.createdAt).toBeInstanceOf(Date);
     recordings.close();
   });
 
   it('returns null for an unknown slug', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -193,8 +193,7 @@ describe('createRecordings.get', () => {
   });
 
   it('returns null for a malformed slug without touching db', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -207,8 +206,7 @@ describe('createRecordings.get', () => {
 
 describe('slug generation (via create)', () => {
   it('produces highly unique slugs over many invocations', async () => {
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
     });
@@ -218,6 +216,7 @@ describe('slug generation (via create)', () => {
       const { slug } = await recordings.create({
         contentType: 'video/webm',
         sizeBytes: 1,
+        userId: TEST_USER_ID,
       });
       expect(slug).toMatch(/^[A-Za-z0-9]{6}$/);
       seen.add(slug);
@@ -227,12 +226,11 @@ describe('slug generation (via create)', () => {
   });
 });
 
-describe('createRecordings.create slug collision retry', () => {
+describe('createInMemoryRecordings.create slug collision retry', () => {
   it('retries when the generator returns a duplicate slug, then succeeds', async () => {
     const slugs = ['taken1', 'taken1', 'fresh2'];
     let i = 0;
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
       generateSlug: () => slugs[i++],
@@ -242,6 +240,7 @@ describe('createRecordings.create slug collision retry', () => {
     const first = await recordings.create({
       contentType: 'video/webm',
       sizeBytes: 1,
+      userId: TEST_USER_ID,
     });
     expect(first.slug).toBe('taken1');
 
@@ -249,6 +248,7 @@ describe('createRecordings.create slug collision retry', () => {
     const second = await recordings.create({
       contentType: 'video/webm',
       sizeBytes: 100,
+      userId: TEST_USER_ID,
     });
     expect(second.slug).toBe('fresh2');
     expect(i).toBe(3);
@@ -260,8 +260,7 @@ describe('createRecordings.create slug collision retry', () => {
 
   it('throws after exhausting MAX_SLUG_TRIES (5) collisions', async () => {
     let calls = 0;
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       viewerUrl: viewerUrlFor,
       generateSlug: () => {
@@ -271,12 +270,12 @@ describe('createRecordings.create slug collision retry', () => {
     });
 
     // Pre-claim the slug, then attempt to create again with every retry colliding.
-    await recordings.create({ contentType: 'video/webm', sizeBytes: 1 });
+    await recordings.create({ contentType: 'video/webm', sizeBytes: 1, userId: TEST_USER_ID });
     expect(calls).toBe(1);
     calls = 0;
 
     const err = await recordings
-      .create({ contentType: 'video/webm', sizeBytes: 100 })
+      .create({ contentType: 'video/webm', sizeBytes: 100, userId: TEST_USER_ID })
       .then(
         () => {
           throw new Error('expected create to reject');
@@ -291,11 +290,10 @@ describe('createRecordings.create slug collision retry', () => {
   });
 });
 
-describe('createRecordings.create orphan-row policy on R2 failure', () => {
+describe('createInMemoryRecordings.create orphan-row policy on R2 failure', () => {
   it('rejects with UploadMintFailedError (carrying the orphaned slug + cause) and leaves the row inserted', async () => {
     const r2Cause = new Error('R2 unavailable');
-    const recordings = createRecordings({
-      dbPath: ':memory:',
+    const recordings = createInMemoryRecordings({
       ...fakeR2(),
       mintUploadUrl: async () => {
         throw r2Cause;
@@ -305,7 +303,7 @@ describe('createRecordings.create orphan-row policy on R2 failure', () => {
     });
 
     const err = await recordings
-      .create({ contentType: 'video/webm', sizeBytes: 100 })
+      .create({ contentType: 'video/webm', sizeBytes: 100, userId: TEST_USER_ID })
       .then(
         () => {
           throw new Error('expected create to reject');
@@ -316,10 +314,7 @@ describe('createRecordings.create orphan-row policy on R2 failure', () => {
     expect((err as UploadMintFailedError).slug).toBe('orph01');
     expect((err as UploadMintFailedError).cause).toBe(r2Cause);
 
-    // Orphan-by-design: the row exists, the R2 object never lands. The
-    // public read path returns the Recording because the row is present,
-    // even though the R2 object is missing. See docs/adr/0002, docs/adr/0009.
-    // A future sweeper (v0.4) reconciles.
+    // Orphan-by-design: the row exists, the R2 object never lands.
     const recording = await recordings.get('orph01');
     expect(recording).not.toBeNull();
     expect(recording!.slug).toBe('orph01');

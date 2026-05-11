@@ -1,5 +1,8 @@
-import Database from 'better-sqlite3';
 import { randomBytes } from 'node:crypto';
+import { eq, and, lt, desc } from 'drizzle-orm';
+import type { Db } from './db/client';
+import * as schema from './db/schema';
+
 export type AllowedMime =
   | 'video/webm'
   | 'video/webm;codecs=vp9'
@@ -17,10 +20,6 @@ const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789
 const SLUG_LENGTH = 6;
 const SLUG_RE = new RegExp(`^[A-Za-z0-9]{${SLUG_LENGTH}}$`);
 const MAX_SLUG_TRIES = 5;
-
-function isValidSlug(s: string): boolean {
-  return SLUG_RE.test(s);
-}
 
 export class SlugGenerationExhaustedError extends Error {
   readonly tries: number;
@@ -59,88 +58,8 @@ export class UploadMintFailedError extends Error {
   }
 }
 
-class DuplicateSlugError extends Error {
-  constructor(slug: string) {
-    super(`Recording with slug "${slug}" already exists`);
-    this.name = 'DuplicateSlugError';
-  }
-}
-
-function normalizeContentType(raw: unknown): string {
-  if (typeof raw !== 'string') return '';
-  return raw.toLowerCase().replace(/\s+/g, '');
-}
-
-interface RecordingRow {
-  slug: string;
-  r2Key: string;
-  mimeType: string;
-  createdAt: number;
-}
-
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS recordings (
-  slug        TEXT PRIMARY KEY,
-  r2_key      TEXT NOT NULL,
-  mime_type   TEXT NOT NULL,
-  created_at  INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_recordings_created_at ON recordings(created_at);
-`;
-
-export interface CreateRecordingArgs {
-  contentType: string;
-  sizeBytes: number;
-}
-
-export interface CreatedRecording {
-  slug: string;
-  uploadUrl: string;
-  viewerUrl: string;
-}
-
-/**
- * The conceptual entity from CONTEXT.md — a Recording's row + R2-object pair,
- * surfaced as the public read shape. Routes project this to wire shapes
- * (e.g. the Viewer page's renderer input) — see ADR-0015.
- */
-export interface Recording {
-  slug: string;
-  r2Key: string;
-  mimeType: string;
-  createdAt: number;
-}
-
-export interface Recordings {
-  /**
-   * Creates a Recording: writes a row, mints an Upload URL, returns both URLs.
-   *
-   * @throws {UnsupportedContentTypeError} if `contentType` is not in `ALLOWED_MIME`.
-   *   The row is never written.
-   * @throws {SlugGenerationExhaustedError} after `MAX_SLUG_TRIES` consecutive
-   *   slug collisions. The row is never written.
-   * @throws {UploadMintFailedError} if `mintUploadUrl` rejects after the row
-   *   has been written. The row is **not** rolled back — see ADR-0001/0002/0009.
-   *   The orphaned slug is recoverable from the error.
-   */
-  create(args: CreateRecordingArgs): Promise<CreatedRecording>;
-  get(slug: string): Promise<Recording | null>;
-  close(): void;
-}
-
-export interface RecordingsDeps {
-  /** Path to the SQLite file; use ':memory:' for tests. */
-  dbPath: string;
-  /** Mints a presigned PUT URL the browser uses to upload bytes to R2. */
-  mintUploadUrl: (args: {
-    key: string;
-    contentType: string;
-    sizeBytes: number;
-  }) => Promise<string>;
-  /** Builds the absolute Viewer URL for a Recording. Owned by `urls.ts` — see docs/adr/0003. */
-  viewerUrl: (slug: string) => string;
-  /** Optional override for tests — defaults to the real CSPRNG-backed generator. */
-  generateSlug?: () => string;
+function isValidSlug(s: string): boolean {
+  return SLUG_RE.test(s);
 }
 
 function defaultGenerateSlug(): string {
@@ -156,94 +75,173 @@ function r2KeyForSlug(slug: string): string {
   return `${slug}.webm`;
 }
 
-export function createRecordings(deps: RecordingsDeps): Recordings {
-  const db = new Database(deps.dbPath);
-  db.pragma('journal_mode = WAL');
-  db.exec(SCHEMA);
+function normalizeContentType(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  return raw.toLowerCase().replace(/\s+/g, '');
+}
 
-  const insertStmt = db.prepare(
-    `INSERT INTO recordings (slug, r2_key, mime_type, created_at) VALUES (?, ?, ?, ?)`,
-  );
-  const getStmt = db.prepare(
-    `SELECT slug, r2_key AS r2Key, mime_type AS mimeType, created_at AS createdAt
-     FROM recordings WHERE slug = ?`,
-  );
+export interface Recording {
+  slug: string;
+  userId: string;
+  r2Key: string;
+  mimeType: string;
+  createdAt: Date;
+}
 
-  function insertRow(row: RecordingRow): void {
+export interface CreateRecordingArgs { contentType: string; sizeBytes: number; userId: string; }
+export interface CreatedRecording    { slug: string; uploadUrl: string; viewerUrl: string; }
+export interface ListRecordingsArgs  { userId: string; limit: number; before?: Date; }
+
+export interface Recordings {
+  /**
+   * Creates a Recording: writes a row, mints an Upload URL, returns both URLs.
+   *
+   * @throws {UnsupportedContentTypeError} if `contentType` is not in `ALLOWED_MIME`.
+   *   The row is never written.
+   * @throws {SlugGenerationExhaustedError} after `MAX_SLUG_TRIES` consecutive
+   *   slug collisions. The row is never written.
+   * @throws {UploadMintFailedError} if `mintUploadUrl` rejects after the row
+   *   has been written. The row is **not** rolled back — see ADR-0001/0002/0009.
+   *   The orphaned slug is recoverable from the error.
+   */
+  create(args: CreateRecordingArgs): Promise<CreatedRecording>;
+  get(slug: string): Promise<Recording | null>;
+  listForUser(args: ListRecordingsArgs): Promise<Recording[]>;
+  deleteForUser(args: { slug: string; userId: string }): Promise<Recording | null>;
+  close(): void;
+}
+
+export interface RecordingsBaseDeps {
+  /** Mints a presigned PUT URL the browser uses to upload bytes to R2. */
+  mintUploadUrl: (args: {
+    key: string;
+    contentType: string;
+    sizeBytes: number;
+  }) => Promise<string>;
+  /** Builds the absolute Viewer URL for a Recording. Owned by `urls.ts` — see docs/adr/0003. */
+  viewerUrl: (slug: string) => string;
+  /** Optional override for tests — defaults to the real CSPRNG-backed generator. */
+  generateSlug?: () => string;
+}
+
+class DuplicateSlugError extends Error {
+  constructor(slug: string) {
+    super(`dup slug ${slug}`);
+    this.name = 'DuplicateSlugError';
+  }
+}
+
+async function createRecordingCore(args: {
+  contentType: string;
+  sizeBytes: number;
+  userId: string;
+  generateSlug: () => string;
+  mintUploadUrl: RecordingsBaseDeps['mintUploadUrl'];
+  viewerUrl: RecordingsBaseDeps['viewerUrl'];
+  insert: (row: { slug: string; userId: string; r2Key: string; mimeType: string }) => Promise<void>;
+}): Promise<CreatedRecording> {
+  const normalizedContentType = normalizeContentType(args.contentType);
+  if (!(ALLOWED_MIME as readonly string[]).includes(normalizedContentType)) {
+    throw new UnsupportedContentTypeError(String(args.contentType));
+  }
+  let lastErr: unknown = null;
+  for (let i = 0; i < MAX_SLUG_TRIES; i++) {
+    const slug = args.generateSlug();
+    const r2Key = r2KeyForSlug(slug);
     try {
-      insertStmt.run(row.slug, row.r2Key, row.mimeType, row.createdAt);
+      await args.insert({ slug, userId: args.userId, r2Key, mimeType: normalizedContentType });
     } catch (err) {
-      if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
-        throw new DuplicateSlugError(row.slug);
-      }
+      if (err instanceof DuplicateSlugError) { lastErr = err; continue; }
       throw err;
     }
+    let uploadUrl: string;
+    try {
+      uploadUrl = await args.mintUploadUrl({ key: r2Key, contentType: normalizedContentType, sizeBytes: args.sizeBytes });
+    } catch (cause) {
+      throw new UploadMintFailedError({ slug, cause });
+    }
+    return { slug, uploadUrl, viewerUrl: args.viewerUrl(slug) };
   }
+  throw new SlugGenerationExhaustedError({ tries: MAX_SLUG_TRIES, lastError: lastErr });
+}
 
-  function getRow(slug: string): RecordingRow | null {
-    return (getStmt.get(slug) as RecordingRow | undefined) ?? null;
-  }
+// ---------- Postgres impl ----------
 
-  const generateSlug = deps.generateSlug ?? defaultGenerateSlug;
-
+export function createPostgresRecordings(deps: RecordingsBaseDeps & { db: Db }): Recordings {
+  const gen = deps.generateSlug ?? defaultGenerateSlug;
   return {
-    async create({ contentType, sizeBytes }) {
-      const normalizedContentType = normalizeContentType(contentType);
-      if (!(ALLOWED_MIME as readonly string[]).includes(normalizedContentType)) {
-        throw new UnsupportedContentTypeError(String(contentType));
-      }
-      let lastErr: unknown = null;
-      for (let i = 0; i < MAX_SLUG_TRIES; i++) {
-        const slug = generateSlug();
-        const r2Key = r2KeyForSlug(slug);
-        try {
-          insertRow({
-            slug,
-            r2Key,
-            mimeType: normalizedContentType,
-            createdAt: Date.now(),
-          });
-        } catch (err) {
-          if (err instanceof DuplicateSlugError) {
-            lastErr = err;
-            continue;
+    async create(args) {
+      return createRecordingCore({
+        ...args,
+        generateSlug: gen,
+        mintUploadUrl: deps.mintUploadUrl,
+        viewerUrl: deps.viewerUrl,
+        insert: async (row) => {
+          try {
+            await deps.db.insert(schema.recordings).values(row);
+          } catch (err: any) {
+            if (err?.code === '23505') throw new DuplicateSlugError(row.slug);
+            throw err;
           }
-          throw err;
-        }
-        // Row inserted. Mint the upload URL. If R2 fails here the row is
-        // orphaned by design (see docs/adr/0002, ADR-0009): R2 is the source
-        // of truth, the viewer 404s, a v0.4 sweeper reconciles. We deliberately
-        // do NOT roll the row back; we surface the failure as
-        // UploadMintFailedError so callers can distinguish it from internal bugs.
-        let uploadUrl: string;
-        try {
-          uploadUrl = await deps.mintUploadUrl({
-            key: r2Key,
-            contentType: normalizedContentType,
-            sizeBytes,
-          });
-        } catch (cause) {
-          throw new UploadMintFailedError({ slug, cause });
-        }
-        return {
-          slug,
-          uploadUrl,
-          viewerUrl: deps.viewerUrl(slug),
-        };
-      }
-      throw new SlugGenerationExhaustedError({
-        tries: MAX_SLUG_TRIES,
-        lastError: lastErr,
+        },
       });
     },
-
     async get(slug) {
       if (!isValidSlug(slug)) return null;
-      return getRow(slug);
+      const [row] = await deps.db.select().from(schema.recordings).where(eq(schema.recordings.slug, slug));
+      return row ?? null;
     },
+    async listForUser({ userId, limit, before }) {
+      const where = before
+        ? and(eq(schema.recordings.userId, userId), lt(schema.recordings.createdAt, before))
+        : eq(schema.recordings.userId, userId);
+      return deps.db.select().from(schema.recordings).where(where)
+        .orderBy(desc(schema.recordings.createdAt)).limit(limit);
+    },
+    async deleteForUser({ slug, userId }) {
+      const [row] = await deps.db.delete(schema.recordings)
+        .where(and(eq(schema.recordings.slug, slug), eq(schema.recordings.userId, userId)))
+        .returning();
+      return row ?? null;
+    },
+    close() {},
+  };
+}
 
-    close() {
-      db.close();
+// ---------- In-memory impl ----------
+
+export function createInMemoryRecordings(deps: RecordingsBaseDeps): Recordings {
+  const gen = deps.generateSlug ?? defaultGenerateSlug;
+  const rows = new Map<string, Recording>();
+  return {
+    async create(args) {
+      return createRecordingCore({
+        ...args,
+        generateSlug: gen,
+        mintUploadUrl: deps.mintUploadUrl,
+        viewerUrl: deps.viewerUrl,
+        insert: async (row) => {
+          if (rows.has(row.slug)) throw new DuplicateSlugError(row.slug);
+          rows.set(row.slug, { ...row, createdAt: new Date() });
+        },
+      });
     },
+    async get(slug) {
+      if (!isValidSlug(slug)) return null;
+      return rows.get(slug) ?? null;
+    },
+    async listForUser({ userId, limit, before }) {
+      return [...rows.values()]
+        .filter((r) => r.userId === userId && (!before || r.createdAt < before))
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, limit);
+    },
+    async deleteForUser({ slug, userId }) {
+      const row = rows.get(slug);
+      if (!row || row.userId !== userId) return null;
+      rows.delete(slug);
+      return row;
+    },
+    close() {},
   };
 }
