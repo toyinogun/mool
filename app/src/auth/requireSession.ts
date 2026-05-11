@@ -3,12 +3,6 @@ import type { AuthStore, User } from './authStore';
 import { hashToken } from './tokens';
 import { SESSION_COOKIE_NAME } from './cookies';
 
-declare module 'express-serve-static-core' {
-  interface Request {
-    user?: User;
-  }
-}
-
 export interface RequireSessionOpts {
   authStore: AuthStore;
   /** `html` 302s to `signinUrl`; `json` returns 401 with `{error:'unauthenticated'}`. */
