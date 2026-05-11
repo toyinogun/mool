@@ -24,6 +24,7 @@ import {
 import { createCapture } from './recorderCapture.js';
 import { runEffect } from './recorderEffects.js';
 import { composeStreams } from './recorderComposite.js';
+import { isFloatingCamSupported, openFloatingCam } from './recorderFloatingCam.js';
 
 const startBtn = document.getElementById('start');
 const stopBtn = document.getElementById('stop');
@@ -39,6 +40,9 @@ const camPreviewHidden = /** @type {HTMLElement} */ (document.getElementById('ca
 const camPreviewVideo = /** @type {HTMLVideoElement} */ (document.getElementById('cam-preview'));
 const camPreviewToggleBtn = /** @type {HTMLButtonElement} */ (document.getElementById('cam-preview-toggle'));
 const camPreviewShowBtn = /** @type {HTMLButtonElement} */ (document.getElementById('cam-preview-show'));
+const camPipNote = /** @type {HTMLElement} */ (document.getElementById('cam-pip-note'));
+
+const floatingCamSupported = isFloatingCamSupported();
 
 /** @type {State} */
 let state = initialState();
@@ -46,6 +50,7 @@ let state = initialState();
 /** @type {MediaStream | null} */
 let cameraStream = null;
 let previewVisible = true;
+let previewSuspended = false;
 let camGen = 0;
 
 /**
@@ -56,6 +61,15 @@ let camGen = 0;
  * @type {(() => void) | null}
  */
 let composeStop = null;
+
+/**
+ * Cancellation handle for the active floating-camera overlay. Captured in
+ * startCapture() when videoEnabled && cameraStream && floatingCamSupported,
+ * consumed in releaseStream() before capture.release() (and also by the
+ * onCameraEnded callback, see below), and nulled. Null otherwise.
+ * @type {(() => void) | null}
+ */
+let floatingCamStop = null;
 
 const capture = createCapture({
   navigator,
@@ -113,6 +127,13 @@ const ports = {
       composeStop();
       composeStop = null;
     }
+    if (floatingCamStop) {
+      floatingCamStop();
+      floatingCamStop = null;
+    }
+    // No-op if not suspended (camera-off recording, or bubble already
+    // closed via onClosed). Safe in all paths.
+    restoreInPagePreview();
     capture.release();
   },
   requestDisplay: () => capture.requestDisplay(),
@@ -126,6 +147,11 @@ const ports = {
       composeStop = composite.stop;
       composite.onCameraEnded(() => {
         ports.setStatus('Camera disconnected — continuing with screen only.');
+        if (floatingCamStop) {
+          floatingCamStop();
+          floatingCamStop = null;
+          restoreInPagePreview();
+        }
       });
       // capture.start receives the composite stream as its "screen" stream.
       // Audio merging stays in capture (single source of truth for mime
@@ -133,6 +159,35 @@ const ports = {
       // track ending in composeStreams — propagates as TrackEnded via
       // capture's onended wiring on the merged stream's tracks.
       capture.start(composite.compositeStream, audioStream, onTrackEnded);
+
+      // Floating-camera overlay (Document PIP). Skipped on non-Chromium
+      // browsers; failures are non-fatal — the recording is the product,
+      // the bubble is feedback.
+      if (floatingCamSupported) {
+        try {
+          const handle = openFloatingCam({
+            cameraStream,
+            onStopClicked: () => dispatch({ type: 'StopClicked' }),
+            onClosed: () => {
+              floatingCamStop = null;
+              restoreInPagePreview();
+              ports.setStatus('Floating camera closed — recording continues.');
+            },
+            onError: () => {
+              floatingCamStop = null;
+              restoreInPagePreview();
+              ports.setStatus('Floating camera unavailable — recording continues without overlay.');
+            },
+          });
+          floatingCamStop = handle.close;
+          suspendInPagePreview();
+        } catch {
+          // Synchronous throw from openFloatingCam means the API isn't
+          // available. floatingCamSupported guard above should make this
+          // unreachable, but if it isn't, leave the in-page preview alone.
+          ports.setStatus('Floating camera unavailable — recording continues without overlay.');
+        }
+      }
     } else {
       capture.start(stream, audioStream, onTrackEnded);
     }
@@ -178,15 +233,50 @@ camToggleEl.addEventListener('change', async () => {
 
 camPreviewToggleBtn.addEventListener('click', () => {
   previewVisible = false;
+  if (previewSuspended) return;
   camPreviewWrap.hidden = true;
   camPreviewHidden.hidden = false;
 });
 
 camPreviewShowBtn.addEventListener('click', () => {
   previewVisible = true;
+  if (previewSuspended) return;
   camPreviewHidden.hidden = true;
   camPreviewWrap.hidden = false;
 });
+
+/**
+ * Hide both in-page preview affordances (visible circle and the
+ * "preview hidden" placeholder) while the floating-cam bubble is open.
+ * Records the suspension in a flag so other preview-state changes don't
+ * accidentally re-show the in-page preview.
+ */
+function suspendInPagePreview() {
+  previewSuspended = true;
+  camPreviewWrap.hidden = true;
+  camPreviewHidden.hidden = true;
+}
+
+/**
+ * Reverse `suspendInPagePreview()`. Re-applies the visibility rule from
+ * `previewVisible` (which is unchanged across suspend/restore). If the
+ * camera was turned off during suspension, clears the flag but skips DOM
+ * updates (nothing to show).
+ */
+function restoreInPagePreview() {
+  if (!previewSuspended) return;
+  // Clear flag before the cameraStream guard — restore is "no longer
+  // suspended" regardless of whether the DOM gets touched.
+  previewSuspended = false;
+  if (!cameraStream) return;
+  if (previewVisible) {
+    camPreviewWrap.hidden = false;
+    camPreviewHidden.hidden = true;
+  } else {
+    camPreviewWrap.hidden = true;
+    camPreviewHidden.hidden = false;
+  }
+}
 
 async function turnCameraOn() {
   const myGen = ++camGen;
@@ -220,6 +310,8 @@ async function turnCameraOn() {
   if (myGen !== camGen || !camToggleEl.checked) {
     // User toggled away (or rapid on→off→on) while we were awaiting the
     // permission prompt. Release the stream we just got — we don't own it.
+    // camPipNote needs no reset here: turnCameraOff (or showCamFailure)
+    // ran during the await and already hid it.
     stream.getTracks().forEach((t) => t.stop());
     return;
   }
@@ -227,12 +319,17 @@ async function turnCameraOn() {
   cameraStream = stream;
   camPreviewVideo.srcObject = stream;
   void camPreviewVideo.play().catch(() => {});
-  if (previewVisible) {
-    camPreviewWrap.hidden = false;
-    camPreviewHidden.hidden = true;
-  } else {
-    camPreviewWrap.hidden = true;
-    camPreviewHidden.hidden = false;
+  if (!previewSuspended) {
+    if (previewVisible) {
+      camPreviewWrap.hidden = false;
+      camPreviewHidden.hidden = true;
+    } else {
+      camPreviewWrap.hidden = true;
+      camPreviewHidden.hidden = false;
+    }
+  }
+  if (!floatingCamSupported) {
+    camPipNote.hidden = false;
   }
 }
 
@@ -245,6 +342,7 @@ function turnCameraOff() {
   camPreviewVideo.srcObject = null;
   camPreviewWrap.hidden = true;
   camPreviewHidden.hidden = true;
+  camPipNote.hidden = true;
 }
 
 /**
@@ -259,5 +357,6 @@ function showCamFailure(message) {
   camPreviewVideo.srcObject = null;
   camPreviewWrap.hidden = true;
   camPreviewHidden.hidden = true;
+  camPipNote.hidden = true;
   ports.setStatus(message);
 }
