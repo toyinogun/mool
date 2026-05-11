@@ -20,10 +20,17 @@ export interface UrlsConfig {
 export interface Urls {
   /** Absolute Viewer URL for a Recording, e.g. `https://record.example.com/v/abc123`. */
   viewerUrl(slug: string): string;
+  /** Absolute URL of the sign-in page, e.g. `https://record.example.com/signin`. */
+  signinUrl(): string;
+  /** Absolute URL of the user's recording library, e.g. `https://record.example.com/library`. */
+  libraryUrl(): string;
 }
 
 export function createUrls(cfg: UrlsConfig): Urls {
+  const base = cfg.publicAppUrl;
   return {
-    viewerUrl: (slug) => `${cfg.publicAppUrl}/v/${slug}`,
+    viewerUrl: (slug) => `${base}/v/${slug}`,
+    signinUrl: () => `${base}/signin`,
+    libraryUrl: () => `${base}/library`,
   };
 }
