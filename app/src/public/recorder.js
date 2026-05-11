@@ -131,6 +131,8 @@ const ports = {
       floatingCamStop();
       floatingCamStop = null;
     }
+    // No-op if not suspended (camera-off recording, or bubble already
+    // closed via onClosed). Safe in all paths.
     restoreInPagePreview();
     capture.release();
   },

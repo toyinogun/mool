@@ -87,10 +87,12 @@ export function openFloatingCam({
       });
     } catch (err) {
       if (!closeRequested) {
+        // Always log so devtools shows a breadcrumb, even when onError is
+        // wired (callers commonly map err → fixed status string and would
+        // otherwise eat the underlying cause).
+        console.error('openFloatingCam: requestWindow failed', err);
         if (onError) {
           try { onError(err); } catch { /* one bad listener shouldn't stop teardown */ }
-        } else {
-          console.error('openFloatingCam: requestWindow failed', err);
         }
       }
       return;
