@@ -125,4 +125,9 @@ describe('v0.4 vars', () => {
     const { DATABASE_URL, ...rest } = baseEnv;
     expect(() => loadConfig(rest)).toThrow(/DATABASE_URL/);
   });
+
+  it('throws when COOKIE_SECURE is not "true" or "false"', () => {
+    expect(() => loadConfig({ ...baseEnv, COOKIE_SECURE: 'yes' })).toThrow(/COOKIE_SECURE/);
+    expect(() => loadConfig({ ...baseEnv, COOKIE_SECURE: '1' })).toThrow(/COOKIE_SECURE/);
+  });
 });

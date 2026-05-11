@@ -62,5 +62,8 @@ if (require.main === module) {
     app.listen(config.port, () => {
       console.log(`Mool listening on :${config.port}`);
     });
-  })();
+  })().catch((err) => {
+    console.error('Fatal boot error:', err);
+    process.exit(1);
+  });
 }
