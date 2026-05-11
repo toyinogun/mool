@@ -12,7 +12,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { eq, and, isNull, lt } from 'drizzle-orm';
+import { eq, and, isNull, lt, gte } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import type { Db } from '../db/client';
 import * as schema from '../db/schema';
 
@@ -75,8 +76,9 @@ export function createInMemoryAuthStore(opts: { now?: () => Date } = {}): AuthSt
     async upsertUserByEmail({ email, displayName }) {
       const existing = usersByEmail.get(email);
       if (existing) {
-        const u = users.get(existing)!;
-        return { ...u, updatedAt: now() };
+        const updated = { ...users.get(existing)!, updatedAt: now() };
+        users.set(existing, updated);
+        return updated;
       }
       const id = randomUUID();
       const user: User = { id, email, displayName, createdAt: now(), updatedAt: now() };
@@ -175,10 +177,11 @@ export function createPostgresAuthStore({ db }: { db: Db }): AuthStore {
         })
         .from(schema.sessions)
         .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
-        .where(eq(schema.sessions.tokenHash, hash));
-      if (!row) return null;
-      if (row.expiresAt < new Date()) return null;
-      return row;
+        .where(and(
+          eq(schema.sessions.tokenHash, hash),
+          gte(schema.sessions.expiresAt, sql`NOW()`),
+        ));
+      return row ?? null;
     },
     async deleteSession(hash) {
       await db.delete(schema.sessions).where(eq(schema.sessions.tokenHash, hash));

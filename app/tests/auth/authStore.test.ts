@@ -23,6 +23,17 @@ describe('AuthStore (in-memory)', () => {
       expect(u2.id).toBe(u1.id);
       expect(u2.displayName).toBe('first');
     });
+
+    it('upsertUserByEmail bumps updatedAt; findUserById returns the bumped row', async () => {
+      let nowVal = new Date('2026-01-01T00:00:00Z');
+      const store2 = createInMemoryAuthStore({ now: () => nowVal });
+      const u1 = await store2.upsertUserByEmail({ email: 'a@b.com', displayName: 'a' });
+      nowVal = new Date('2026-01-02T00:00:00Z');
+      const u2 = await store2.upsertUserByEmail({ email: 'a@b.com', displayName: 'a' });
+      expect(u2.updatedAt).toEqual(new Date('2026-01-02T00:00:00Z'));
+      const found = await store2.findUserById(u1.id);
+      expect(found?.updatedAt).toEqual(new Date('2026-01-02T00:00:00Z'));
+    });
   });
 
   describe('signin tokens', () => {
