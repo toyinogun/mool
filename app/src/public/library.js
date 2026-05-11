@@ -21,9 +21,15 @@ list.addEventListener('click', async (e) => {
   if (!btn) return;
   const slug = btn.dataset.slug;
   if (btn.classList.contains('lib-copy')) {
-    await navigator.clipboard.writeText(`${location.origin}/v/${slug}`);
-    btn.textContent = 'Copied';
-    setTimeout(() => { btn.textContent = 'Copy link'; }, 1500);
+    const url = `${location.origin}/v/${slug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.textContent = 'Copied';
+      setTimeout(() => { btn.textContent = 'Copy link'; }, 1500);
+    } catch {
+      // Fallback for insecure contexts / permission-denied
+      prompt('Copy this link:', url);
+    }
   } else if (btn.classList.contains('lib-delete')) {
     if (!confirm('Delete this recording? This cannot be undone.')) return;
     const res = await fetch(`/recordings/${slug}`, { method: 'DELETE' });
