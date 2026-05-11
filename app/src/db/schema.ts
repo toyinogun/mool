@@ -12,6 +12,7 @@ import {
   timestamp,
   uuid,
   customType,
+  index,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -37,7 +38,10 @@ export const sessions = pgTable('sessions', {
     .references(() => users.id, { onDelete: 'cascade' }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('idx_sessions_user_id').on(t.userId),
+  index('idx_sessions_expires_at').on(t.expiresAt),
+]);
 
 export const signinTokens = pgTable('signin_tokens', {
   tokenHash: bytea('token_hash').primaryKey(),
@@ -45,7 +49,9 @@ export const signinTokens = pgTable('signin_tokens', {
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   consumedAt: timestamp('consumed_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('idx_signin_tokens_expires_at').on(t.expiresAt),
+]);
 
 export const recordings = pgTable('recordings', {
   slug: text('slug').primaryKey(),
@@ -55,7 +61,9 @@ export const recordings = pgTable('recordings', {
   r2Key: text('r2_key').notNull(),
   mimeType: text('mime_type').notNull(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  index('idx_recordings_user_id_created_at').on(t.userId, t.createdAt.desc()),
+]);
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
