@@ -34,6 +34,7 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
   const defaults = fakeR2();
   const { app, recordings } = compose({
     dbPath: ':memory:',
+    db: null,
     template: VIEWER_TEMPLATE_STUB,
     publicAppUrl: 'https://record.example.com',
     mintUploadUrl: opts.mintUploadUrl ?? defaults.mintUploadUrl,

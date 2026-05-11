@@ -4,6 +4,7 @@ import type { Express } from 'express';
 import { loadConfig, type AppConfig } from './config';
 import { createR2 } from './r2';
 import { compose } from './compose';
+import { createDb, runMigrations, type DbHandle } from './db/client';
 import type { Recordings } from './recording';
 
 export interface BootServerOpts {
@@ -12,6 +13,8 @@ export interface BootServerOpts {
   viewsDir: string;
   /** Directory of static assets to serve, or `null` to skip the static handler. */
   publicDir: string | null;
+  /** When true, skip both db construction and migration. Used by tests that don't exercise the data layer. */
+  skipDb?: boolean;
 }
 
 /**
@@ -23,14 +26,21 @@ export interface BootServerOpts {
  * a child process — the production entry point under `if (require.main === module)`
  * is the only caller in production.
  */
-export function bootServer({ config, viewsDir, publicDir }: BootServerOpts): {
+export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootServerOpts): Promise<{
   app: Express;
   recordings: Recordings;
-} {
+  dbHandle: DbHandle | null;
+}> {
   mkdirSync(config.dataDir, { recursive: true });
+  let dbHandle: DbHandle | null = null;
+  if (!skipDb) {
+    dbHandle = createDb(config.databaseUrl);
+    await runMigrations(dbHandle.db, path.join(__dirname, '..', 'db', 'migrations'));
+  }
   const r2 = createR2(config.r2);
-  return compose({
+  const { app, recordings } = compose({
     dbPath: path.join(config.dataDir, 'db.sqlite'),
+    db: dbHandle?.db ?? null,
     template: readFileSync(path.join(viewsDir, 'viewer.html'), 'utf8'),
     publicAppUrl: config.publicAppUrl,
     mintUploadUrl: r2.mintUploadUrl,
@@ -38,16 +48,19 @@ export function bootServer({ config, viewsDir, publicDir }: BootServerOpts): {
     maxUploadBytes: config.maxUploadBytes,
     publicDir,
   });
+  return { app, recordings, dbHandle };
 }
 
 if (require.main === module) {
-  const config = loadConfig();
-  const { app } = bootServer({
-    config,
-    viewsDir: path.join(__dirname, 'views'),
-    publicDir: path.join(__dirname, 'public'),
-  });
-  app.listen(config.port, () => {
-    console.log(`Mool listening on :${config.port}`);
-  });
+  (async () => {
+    const config = loadConfig();
+    const { app } = await bootServer({
+      config,
+      viewsDir: path.join(__dirname, 'views'),
+      publicDir: path.join(__dirname, 'public'),
+    });
+    app.listen(config.port, () => {
+      console.log(`Mool listening on :${config.port}`);
+    });
+  })();
 }

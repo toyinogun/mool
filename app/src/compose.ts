@@ -17,10 +17,13 @@ import { createApp } from './app';
 import { createRecordings, type Recordings, type RecordingsDeps } from './recording';
 import { createUrls } from './urls';
 import { createViewerPage } from './viewerPage';
+import type { Db } from './db/client';
 
 export interface ComposeLeaves {
-  /** Path to the SQLite file; use ':memory:' for tests. */
+  /** Path to the SQLite file; use ':memory:' for tests. Removed in Task 12. */
   dbPath: string;
+  /** Drizzle Postgres handle. `null` permitted in tests that don't exercise PG-backed code. */
+  db: Db | null;
   /** The Viewer page HTML template, already loaded. */
   template: string;
   /** Mool's public-facing app URL, e.g. `https://record.example.com`. */

@@ -35,6 +35,7 @@ function buildConfig(dataDir: string): AppConfig {
     dataDir,
     maxUploadBytes: 500 * 1024 * 1024,
     publicAppUrl: 'https://record.example.com',
+    databaseUrl: 'postgres://test',
     r2: {
       accessKeyId: 'fake-key',
       secretAccessKey: 'fake-secret',
@@ -42,6 +43,14 @@ function buildConfig(dataDir: string): AppConfig {
       endpoint: 'https://fake.r2.cloudflarestorage.com',
       publicBaseUrl: 'https://videos.example.com',
     },
+    resend: {
+      apiKey: 're_test',
+      from: 'auth@example.com',
+    },
+    signinTokenTtlSeconds: 900,
+    sessionTtlSeconds: 2592000,
+    viewUrlTtlSeconds: 3600,
+    cookieSecure: true,
   };
 }
 
@@ -66,10 +75,11 @@ describe('bootServer', () => {
   });
 
   it('boots successfully and serves /healthz', async () => {
-    const { app, recordings } = bootServer({
+    const { app, recordings } = await bootServer({
       config: buildConfig(dataDir),
       viewsDir,
       publicDir: null,
+      skipDb: true,
     });
     cleanups.push(() => recordings.close());
 
@@ -78,38 +88,41 @@ describe('bootServer', () => {
     expect(res.body).toEqual({ ok: true });
   });
 
-  it('creates the data directory if it does not exist', () => {
+  it('creates the data directory if it does not exist', async () => {
     const nested = path.join(tmpRoot, 'does', 'not', 'exist', 'yet');
     expect(existsSync(nested)).toBe(false);
 
-    const { recordings } = bootServer({
+    const { recordings } = await bootServer({
       config: buildConfig(nested),
       viewsDir,
       publicDir: null,
+      skipDb: true,
     });
     cleanups.push(() => recordings.close());
 
     expect(existsSync(nested)).toBe(true);
   });
 
-  it('throws ENOENT when viewer.html is missing from viewsDir', () => {
+  it('throws ENOENT when viewer.html is missing from viewsDir', async () => {
     const emptyViewsDir = path.join(tmpRoot, 'empty-views');
     mkdirSync(emptyViewsDir);
 
-    expect(() =>
+    await expect(
       bootServer({
         config: buildConfig(dataDir),
         viewsDir: emptyViewsDir,
         publicDir: null,
+        skipDb: true,
       }),
-    ).toThrow(/ENOENT.*viewer\.html/);
+    ).rejects.toThrow(/ENOENT.*viewer\.html/);
   });
 
   it('mounts the Viewer route through the real wiring (404 for unknown slug)', async () => {
-    const { app, recordings } = bootServer({
+    const { app, recordings } = await bootServer({
       config: buildConfig(dataDir),
       viewsDir,
       publicDir: null,
+      skipDb: true,
     });
     cleanups.push(() => recordings.close());
 
