@@ -13,6 +13,9 @@ import { createUploadRoute } from './routes/createUpload';
 import { viewerRoute } from './routes/viewer';
 import { authRequestLinkRoute } from './routes/authRequestLink';
 import { authCallbackRoute } from './routes/authCallback';
+import { authSignoutRoute } from './routes/authSignout';
+import { meRoute } from './routes/me';
+import { requireSession } from './auth/requireSession';
 import { VIEWER_ROUTE } from './urls';
 
 type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
@@ -77,8 +80,26 @@ export function createApp(deps: AppDeps): Express {
     cookieSecure: deps.cookieSecure,
   })));
 
+  const signinUrl = `${deps.publicAppUrl}/signin`;
+  const requireSessionHtml = requireSession({ authStore: deps.authStore, mode: 'html', signinUrl });
+  const requireSessionJson = requireSession({ authStore: deps.authStore, mode: 'json', signinUrl: '' });
+
+  // Gated recorder page — must come before express.static so unauthenticated
+  // requests to / are redirected instead of falling through to static.
+  app.get('/', requireSessionHtml, (_req, res, next) => {
+    if (!deps.publicDir) return next();
+    res.sendFile('index.html', { root: deps.publicDir });
+  });
+
+  app.post('/auth/signout', asyncRoute(authSignoutRoute({
+    authStore: deps.authStore,
+    cookieSecure: deps.cookieSecure,
+  })));
+  app.get('/me', requireSessionJson, meRoute());
+
+  // Static middleware — serves all assets except index.html so / is gated above.
   if (deps.publicDir) {
-    app.use(express.static(deps.publicDir));
+    app.use(express.static(deps.publicDir, { index: false }));
   }
 
   app.use(

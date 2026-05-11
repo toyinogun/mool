@@ -7,6 +7,17 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <header class="mool-header">
+      <span class="mool-header-brand">Mool</span>
+      <nav class="mool-header-nav">
+        <a href="/library">Library</a>
+        <span id="mool-user-display"></span>
+        <form action="/auth/signout" method="post" class="mool-signout-form">
+          <button type="submit">Sign out</button>
+        </form>
+      </nav>
+    </header>
+    <script type="module" src="/recorderHeader.js"></script>
     <main class="container">
       <h1>Mool</h1>
       <p class="tagline">Record your screen and share a link.</p>
