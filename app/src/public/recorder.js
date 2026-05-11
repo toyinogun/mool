@@ -50,6 +50,7 @@ let state = initialState();
 /** @type {MediaStream | null} */
 let cameraStream = null;
 let previewVisible = true;
+let previewSuspended = false;
 let camGen = 0;
 
 /**
@@ -182,15 +183,47 @@ camToggleEl.addEventListener('change', async () => {
 
 camPreviewToggleBtn.addEventListener('click', () => {
   previewVisible = false;
+  if (previewSuspended) return;
   camPreviewWrap.hidden = true;
   camPreviewHidden.hidden = false;
 });
 
 camPreviewShowBtn.addEventListener('click', () => {
   previewVisible = true;
+  if (previewSuspended) return;
   camPreviewHidden.hidden = true;
   camPreviewWrap.hidden = false;
 });
+
+/**
+ * Hide both in-page preview affordances (visible circle and the
+ * "preview hidden" placeholder) while the floating-cam bubble is open.
+ * Records the suspension in a flag so other preview-state changes don't
+ * accidentally re-show the in-page preview.
+ */
+function suspendInPagePreview() {
+  previewSuspended = true;
+  camPreviewWrap.hidden = true;
+  camPreviewHidden.hidden = true;
+}
+
+/**
+ * Reverse `suspendInPagePreview()`. Re-applies the visibility rule from
+ * `previewVisible` (which is unchanged across suspend/restore). No-op if
+ * the camera has been turned off in the meantime.
+ */
+function restoreInPagePreview() {
+  if (!previewSuspended) return;
+  previewSuspended = false;
+  if (!cameraStream) return;
+  if (previewVisible) {
+    camPreviewWrap.hidden = false;
+    camPreviewHidden.hidden = true;
+  } else {
+    camPreviewWrap.hidden = true;
+    camPreviewHidden.hidden = false;
+  }
+}
 
 async function turnCameraOn() {
   const myGen = ++camGen;
@@ -233,12 +266,14 @@ async function turnCameraOn() {
   cameraStream = stream;
   camPreviewVideo.srcObject = stream;
   void camPreviewVideo.play().catch(() => {});
-  if (previewVisible) {
-    camPreviewWrap.hidden = false;
-    camPreviewHidden.hidden = true;
-  } else {
-    camPreviewWrap.hidden = true;
-    camPreviewHidden.hidden = false;
+  if (!previewSuspended) {
+    if (previewVisible) {
+      camPreviewWrap.hidden = false;
+      camPreviewHidden.hidden = true;
+    } else {
+      camPreviewWrap.hidden = true;
+      camPreviewHidden.hidden = false;
+    }
   }
   if (!floatingCamSupported) {
     camPipNote.hidden = false;
