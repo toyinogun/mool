@@ -33,6 +33,10 @@ export interface BuildTestAppOpts {
   emailSender?: FakeEmailSender;
   /** Override the signin token TTL in seconds — defaults to 900. */
   signinTokenTtlSeconds?: number;
+  /** Override the session TTL in seconds — defaults to 2592000 (30 days). */
+  sessionTtlSeconds?: number;
+  /** Override the Secure cookie flag — defaults to false (tests run over HTTP). */
+  cookieSecure?: boolean;
 }
 
 export function buildTestApp(opts: BuildTestAppOpts = {}): {
@@ -57,6 +61,8 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
     authStore,
     emailSender,
     signinTokenTtlSeconds: opts.signinTokenTtlSeconds ?? 900,
+    sessionTtlSeconds: opts.sessionTtlSeconds ?? 2592000,
+    cookieSecure: opts.cookieSecure ?? false,
   });
   return { app, recordings, emailSender, cleanup: () => recordings.close() };
 }

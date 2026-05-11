@@ -12,6 +12,7 @@ import type { EmailSender } from './email/sender';
 import { createUploadRoute } from './routes/createUpload';
 import { viewerRoute } from './routes/viewer';
 import { authRequestLinkRoute } from './routes/authRequestLink';
+import { authCallbackRoute } from './routes/authCallback';
 import { VIEWER_ROUTE } from './urls';
 
 type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<unknown>;
@@ -40,6 +41,10 @@ export interface AppDeps {
   publicAppUrl: string;
   /** How long a magic-link signin token is valid for, in seconds. */
   signinTokenTtlSeconds: number;
+  /** How long a session cookie is valid for, in seconds. */
+  sessionTtlSeconds: number;
+  /** Whether to set the Secure flag on the session cookie. */
+  cookieSecure: boolean;
 }
 
 export function createApp(deps: AppDeps): Express {
@@ -65,6 +70,11 @@ export function createApp(deps: AppDeps): Express {
     emailSender: deps.emailSender,
     publicAppUrl: deps.publicAppUrl,
     signinTokenTtlSeconds: deps.signinTokenTtlSeconds,
+  })));
+  app.get('/auth/callback', asyncRoute(authCallbackRoute({
+    authStore: deps.authStore,
+    sessionTtlSeconds: deps.sessionTtlSeconds,
+    cookieSecure: deps.cookieSecure,
   })));
 
   if (deps.publicDir) {

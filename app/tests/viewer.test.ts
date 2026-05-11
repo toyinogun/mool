@@ -90,6 +90,8 @@ describe('GET /v/:slug', () => {
       publicDir: null,
       publicAppUrl: 'https://record.example.com',
       signinTokenTtlSeconds: 900,
+      sessionTtlSeconds: 2592000,
+      cookieSecure: false,
     });
     const res = await request(app).get('/v/abc123');
     expect(res.status).toBe(500);

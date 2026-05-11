@@ -46,6 +46,10 @@ export interface ComposeLeaves {
   emailSender: EmailSender;
   /** How long a magic-link signin token is valid for, in seconds. */
   signinTokenTtlSeconds: number;
+  /** How long a session cookie is valid for, in seconds. */
+  sessionTtlSeconds: number;
+  /** Whether to set the Secure flag on the session cookie. */
+  cookieSecure: boolean;
 }
 
 export function compose(leaves: ComposeLeaves): { app: Express; recordings: Recordings } {
@@ -67,6 +71,8 @@ export function compose(leaves: ComposeLeaves): { app: Express; recordings: Reco
     publicDir: leaves.publicDir,
     publicAppUrl: leaves.publicAppUrl,
     signinTokenTtlSeconds: leaves.signinTokenTtlSeconds,
+    sessionTtlSeconds: leaves.sessionTtlSeconds,
+    cookieSecure: leaves.cookieSecure,
   });
   return { app, recordings };
 }
