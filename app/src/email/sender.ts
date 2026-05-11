@@ -24,7 +24,7 @@ export function createResendSender(opts: ResendSenderOpts): EmailSender {
           `<p><a href="${link}">${link}</a></p>` +
           `<p>If you didn't request this, you can ignore this email.</p>`,
       });
-      if (error) throw new Error(`resend_failed: ${error.message}`);
+      if (error) throw new Error(`resend_failed: ${error.message}`, { cause: error });
     },
   };
 }
