@@ -175,13 +175,13 @@ export function openFloatingCam({
         padding: 0.5rem 1.25rem;
         font-size: 0.95rem;
         border-radius: 6px;
-        border: 1px solid #2da44e;
-        background: #2da44e;
-        color: #e6edf3;
+        border: 1px solid #da3633;
+        background: #da3633;
+        color: #ffffff;
         cursor: pointer;
         font-family: inherit;
       }
-      button.primary:hover { background: #2c974b; }
+      button.primary:hover { background: #cf2c2c; }
     `;
     doc.head.appendChild(style);
 
