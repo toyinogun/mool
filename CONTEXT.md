@@ -55,3 +55,7 @@ _Avoid_: watch page, playback page
 ## Flagged ambiguities
 
 - "Recording" was loosely used to mean either the SQLite row or the R2 object. Resolved: a **Recording** is the conceptual entity; the row and the object are its two manifestations, and the Recording module owns the mapping between them.
+
+## Known code duplication
+
+- **`formatElapsed`** appears in two places: `app/src/public/recorder.js` (drives the in-page timer) and `app/src/public/recorderFloatingCam.js` (drives the PiP timer). Both are four lines, identical, formatting milliseconds into `MM:SS`. The duplication is deliberate per [`docs/superpowers/specs/2026-05-11-pip-timer-and-red-stop-design.md`](docs/superpowers/specs/2026-05-11-pip-timer-and-red-stop-design.md) §4: pulling it across the module boundary would require either exporting a recorder-page helper or moving it to a shared module — both larger refactors than four trivial lines justify. If a third caller appears, extract then. Drift risk: if one copy changes (e.g., adds hour rollover for long recordings), the other must too.
