@@ -5,6 +5,7 @@ import { loadConfig, type AppConfig } from './config';
 import { createR2 } from './r2';
 import { compose } from './compose';
 import { createDb, runMigrations, type DbHandle } from './db/client';
+import { createPostgresAuthStore, createInMemoryAuthStore } from './auth/authStore';
 import type { Recordings } from './recording';
 
 export interface BootServerOpts {
@@ -38,6 +39,9 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
     await runMigrations(dbHandle.db, path.join(__dirname, '..', 'db', 'migrations'));
   }
   const r2 = createR2(config.r2);
+  const authStore = dbHandle
+    ? createPostgresAuthStore({ db: dbHandle.db })
+    : createInMemoryAuthStore();
   const { app, recordings } = compose({
     dbPath: path.join(config.dataDir, 'db.sqlite'),
     db: dbHandle?.db ?? null,
@@ -47,6 +51,7 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
     publicUrl: r2.publicUrl,
     maxUploadBytes: config.maxUploadBytes,
     publicDir,
+    authStore,
   });
   return { app, recordings, dbHandle };
 }

@@ -1,5 +1,7 @@
 import { compose, type ComposeLeaves } from '../../src/compose';
 import type { Recordings, RecordingsDeps } from '../../src/recording';
+import { createInMemoryAuthStore } from '../../src/auth/authStore';
+import type { AuthStore } from '../../src/auth/authStore';
 import type { Express } from 'express';
 
 export function fakeR2() {
@@ -24,6 +26,8 @@ export interface BuildTestAppOpts {
   publicUrl?: ComposeLeaves['publicUrl'];
   /** Override the slug generator — useful when a test needs a known slug. */
   generateSlug?: () => string;
+  /** Override the auth store — defaults to a fresh in-memory impl. */
+  authStore?: AuthStore;
 }
 
 export function buildTestApp(opts: BuildTestAppOpts = {}): {
@@ -32,6 +36,7 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
   cleanup: () => void;
 } {
   const defaults = fakeR2();
+  const authStore = opts.authStore ?? createInMemoryAuthStore();
   const { app, recordings } = compose({
     dbPath: ':memory:',
     db: null,
@@ -42,6 +47,7 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
     maxUploadBytes: opts.maxUploadBytes ?? 500 * 1024 * 1024,
     publicDir: null,
     generateSlug: opts.generateSlug,
+    authStore,
   });
   return { app, recordings, cleanup: () => recordings.close() };
 }

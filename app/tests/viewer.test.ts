@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import request from 'supertest';
 import { buildTestApp } from './helpers/testApp';
 import { createApp } from '../src/app';
+import { createInMemoryAuthStore } from '../src/auth/authStore';
 import type { Recordings } from '../src/recording';
 
 describe('GET /v/:slug', () => {
@@ -76,6 +77,7 @@ describe('GET /v/:slug', () => {
     };
     const app = createApp({
       recordings: failingRecordings,
+      authStore: createInMemoryAuthStore(),
       maxUploadBytes: 1024,
       renderViewerPage: () => {
         throw new Error('renderViewerPage should not be called when recordings.get throws');

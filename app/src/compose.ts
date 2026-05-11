@@ -18,6 +18,7 @@ import { createRecordings, type Recordings, type RecordingsDeps } from './record
 import { createUrls } from './urls';
 import { createViewerPage } from './viewerPage';
 import type { Db } from './db/client';
+import type { AuthStore } from './auth/authStore';
 
 export interface ComposeLeaves {
   /** Path to the SQLite file; use ':memory:' for tests. Removed in Task 12. */
@@ -38,6 +39,8 @@ export interface ComposeLeaves {
   publicDir: string | null;
   /** Optional slug-generator override — used by tests that need a known slug. */
   generateSlug?: () => string;
+  /** Auth store — production passes the Postgres impl; tests pass the in-memory impl. */
+  authStore: AuthStore;
 }
 
 export function compose(leaves: ComposeLeaves): { app: Express; recordings: Recordings } {
@@ -51,6 +54,7 @@ export function compose(leaves: ComposeLeaves): { app: Express; recordings: Reco
   const { renderViewerPage } = createViewerPage({ template: leaves.template });
   const app = createApp({
     recordings,
+    authStore: leaves.authStore,
     maxUploadBytes: leaves.maxUploadBytes,
     renderViewerPage,
     publicUrl: leaves.publicUrl,
