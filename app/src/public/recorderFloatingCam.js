@@ -44,9 +44,15 @@ export function isFloatingCamSupported() {
  * the bubble appears asynchronously. Throws synchronously only if the API
  * is missing — guard with `isFloatingCamSupported()` to avoid this path.
  *
+ * `startedAt` is the `Date.now()` reading at which the recording began. The
+ * PiP window runs its own 1Hz interval and renders `Date.now() - startedAt`
+ * into a timer element. There is one clock (owned by `recorder.js`) and two
+ * displays.
+ *
  * @param {{
  *   cameraStream: MediaStream,
  *   onStopClicked: () => void,
+ *   startedAt: number,
  *   onClosed?: () => void,
  *   onError?: (err: unknown) => void,
  *   width?: number,
@@ -57,6 +63,7 @@ export function isFloatingCamSupported() {
 export function openFloatingCam({
   cameraStream,
   onStopClicked,
+  startedAt,
   onClosed,
   onError,
   width = 240,

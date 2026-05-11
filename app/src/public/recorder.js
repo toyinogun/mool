@@ -168,6 +168,7 @@ const ports = {
           const handle = openFloatingCam({
             cameraStream,
             onStopClicked: () => dispatch({ type: 'StopClicked' }),
+            startedAt: timerStartedAt,
             onClosed: () => {
               floatingCamStop = null;
               restoreInPagePreview();
