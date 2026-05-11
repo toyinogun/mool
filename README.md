@@ -1,8 +1,17 @@
 # Mool
 
-A self-hosted, browser-based screen recorder. v0.1: anonymous recording with shareable links.
+A self-hosted, browser-based screen recorder.
 
-## Architecture (v0.1)
+## What's new in v0.4
+
+- **Accounts via magic link** — sign in with your email (delivered by [Resend](https://resend.com)). No passwords.
+- **Library** — `/library` lists your recordings with a delete button per row.
+- **Private bytes via signed-GET** — R2 is now a private bucket; the viewer page mints a short-lived signed URL per page load. Old public-domain share links are superseded.
+- **Postgres replaces SQLite** — user and recording data live in Postgres (managed by the compose stack). Drizzle ORM; migrations apply automatically at boot.
+
+See `docs/superpowers/specs/2026-05-11-v0.4-accounts-and-postgres-design.md` for the full design.
+
+## Architecture (v0.1–v0.4)
 
 - Browser captures the screen (`getDisplayMedia` + `MediaRecorder`) and uploads
   the resulting WebM directly to **Cloudflare R2** via a presigned PUT URL.
@@ -24,6 +33,11 @@ the full design.
   for R2 and Tunnel).
 - A **Cloudflare R2** subscription (free tier is fine — 10 GB storage, 1M
   Class A ops/month).
+- **Postgres** — provided by the compose stack (`postgres:17-alpine`). No
+  separate install needed. The data directory mounts at `./data/pg` on the
+  host. Set `POSTGRES_PASSWORD` in `.env` before running `docker compose up`.
+- A **[Resend](https://resend.com)** account with a verified sender domain, for
+  magic-link emails.
 
 ## One-time Cloudflare setup
 
@@ -152,7 +166,52 @@ mool/
 └── docs/superpowers/      # Specs and plans
 ```
 
-## What's not in v0.1
+## Cutover from v0.3 → v0.4
 
-No accounts, no microphone, no webcam, no editing, no comments, no file expiry.
-See the spec's growth ladder for what comes next.
+This is a fresh-start cutover. **Old share links die.** See spec §10 for the full rollback plan.
+
+Run the following steps in a single maintenance window:
+
+1. Build and push the v0.4 image. Do not bring it up yet.
+2. Stop v0.3: `docker compose down`.
+3. Archive the old SQLite file: `mv data/db.sqlite data/db.sqlite.v0.3.bak`.
+4. **R2 surgery in the Cloudflare dashboard:**
+   - Detach the `videos.<domain>` custom-domain binding from the bucket.
+   - Update the CORS policy: add `GET` from `*` alongside the existing `PUT`
+     from `https://record.<domain>`.
+5. Wipe the R2 bucket of v0.3 objects (old rows are gone; orphan objects cost
+   money and cannot be served).
+6. **Resend setup:**
+   - Create a Resend account and add `<your-domain>` as a sender domain.
+   - Install the SPF, DKIM, and DMARC DNS records Resend prescribes.
+   - Wait for "Verified" in the Resend dashboard before the first production send.
+   - Save your `RESEND_API_KEY` and `RESEND_FROM`.
+7. Update `.env` with the new vars (see "Configure this repo" above).
+8. `docker compose up -d` — Postgres starts and becomes healthy; the app runs
+   Drizzle migrations at boot; cloudflared reconnects.
+9. Smoke test (use incognito where noted):
+   - Visit `record.<domain>` → expect redirect to `/signin`.
+   - Enter your email → expect a magic-link email within a few seconds.
+   - Click the link → expect to land on `/` signed in.
+   - Record a short clip → confirm upload succeeds and a slug is returned.
+   - Open the share link in incognito → expect the viewer to play.
+   - Open `/library` → expect to see the recording with a working delete button.
+   - Delete it → confirm both R2 object and Postgres row are gone.
+10. Sign out and sign in again to confirm the session round-trip is clean.
+11. Install the backup cron (see below).
+
+### Backup cron
+
+```
+0 3 * * * cd /path/to/mool && ./scripts/backup-pg.sh >> /var/log/mool-backup.log 2>&1
+```
+
+The script (`scripts/backup-pg.sh`) runs `pg_dump | gzip` via `docker compose exec`
+and retains the last 7 days of backups under `./backups/`. Install the cron before
+the maintenance window closes — user data now lives only in Postgres.
+
+## What's not in v0.4
+
+No microphone-only recording, no editing, no comments, no file expiry, no
+per-IP rate limiting on magic-link requests. See the spec's growth ladder for
+what comes next.
