@@ -1,8 +1,7 @@
 # Hybrid live camera overlay design
 
 Date: 2026-05-11
-Branch: `spec/floating-cam-overlay`
-Supersedes the PIP-only behavior described in [`2026-05-11-live-camera-overlay-design.md`](./2026-05-11-live-camera-overlay-design.md) (PIP module unchanged; only the trigger conditions in `recorder.js` change).
+Builds on the PIP-only behavior shipped via [PR #21](https://github.com/toyinogun/mool/pull/21) and described in [`2026-05-11-live-camera-overlay-design.md`](./2026-05-11-live-camera-overlay-design.md). The PIP module (`recorderFloatingCam.js`) is unchanged; only the trigger conditions in `recorder.js` change.
 
 ## 1. Goal
 
@@ -144,7 +143,7 @@ Manual test plan covers the user-visible matrix:
 | Each PIP open resets the window position to the OS default. User who drags the window somewhere loses that position on next tab-switch. | Medium | Mild UX annoyance | Accepted. Most recording sessions involve few tab-switches; rebuild only if users complain. The alternative (keep PIP open, hide in-page bubble) loses the polish goal entirely. |
 | `visibilitychange` fires for non-tab transitions (e.g., entire browser window minimized) and opens PIP unexpectedly. | Low | PIP appears when user minimizes the browser, then disappears when restored. | Accepted. The semantic ("Mool tab not visible to user") is correct; the user just gets a slightly noisier PIP lifecycle on uncommon edge cases. |
 | Race: `requestWindow` resolves AFTER `close()` is called by a `visible` transition. | Low | Spurious PIP window flashes briefly | The module's existing `closeRequested` flag disposes the late-arriving window on resolution. No code change required. |
-| Hybrid ships before the [#20](https://github.com/toyinogun/mool/issues/20) styling fix lands. The polished in-page bubble swaps to an over-zoomed PIP when the user tabs away — UX *worse* than current branch. | High if untreated | Defeats the polish goal | **Hard dependency:** [#20](https://github.com/toyinogun/mool/issues/20) styling fix must land first. Inline the small set of styles the PIP needs in `populate()` instead of relying on `copyStyleSheets`. |
+| Hybrid ships before the [#20](https://github.com/toyinogun/mool/issues/20) styling fix lands. The polished in-page bubble would swap to an over-zoomed PIP when the user tabs away — UX *worse* than the polish goal. | Resolved | — | The styling fix landed in commit `3d208b1` (inline `<style>` block in the bubble's `<head>`, camera sized 200×200 for the larger floating window). No remaining dependency. |
 
 ## 10. Open questions
 
