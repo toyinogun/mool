@@ -12,8 +12,8 @@ export function fakeR2() {
     async mintUploadUrl({ key }: { key: string; contentType: string; sizeBytes: number }) {
       return `https://fake-r2.test/${key}?signed=1`;
     },
-    publicUrl(key: string) {
-      return `https://videos.example.com/${key}`;
+    async mintViewUrl({ key, ttlSeconds }: { key: string; ttlSeconds: number }) {
+      return `https://fake-r2.test/${key}?signed=get&ttl=${ttlSeconds}`;
     },
     async deleteObject(_key: string): Promise<void> {
       // no-op by default; override via BuildTestAppOpts.deleteObject
@@ -31,8 +31,10 @@ export interface BuildTestAppOpts {
   maxUploadBytes?: number;
   /** Override the upload-URL minter — useful for capturing or simulating R2 failure. */
   mintUploadUrl?: RecordingsBaseDeps['mintUploadUrl'];
-  /** Override the public-URL composer — rarely needed; default mirrors prod shape. */
-  publicUrl?: ComposeLeaves['publicUrl'];
+  /** Override the signed-view-URL minter — useful for simulating R2 failure or asserting TTL. */
+  mintViewUrl?: ComposeLeaves['mintViewUrl'];
+  /** Override the view URL TTL in seconds — defaults to 3600. */
+  viewUrlTtlSeconds?: number;
   /** Override the R2 deleteObject implementation — defaults to a no-op. */
   deleteObject?: (key: string) => Promise<void>;
   /** Override the slug generator — useful when a test needs a known slug. */
@@ -65,7 +67,8 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
     libraryTemplate: LIBRARY_TEMPLATE_STUB,
     publicAppUrl: 'https://record.example.com',
     mintUploadUrl: opts.mintUploadUrl ?? defaults.mintUploadUrl,
-    publicUrl: opts.publicUrl ?? defaults.publicUrl,
+    mintViewUrl: opts.mintViewUrl ?? defaults.mintViewUrl,
+    viewUrlTtlSeconds: opts.viewUrlTtlSeconds ?? 3600,
     deleteObject: opts.deleteObject ?? defaults.deleteObject,
     maxUploadBytes: opts.maxUploadBytes ?? 500 * 1024 * 1024,
     publicDir: null,

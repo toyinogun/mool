@@ -33,8 +33,10 @@ export interface ComposeLeaves {
   publicAppUrl: string;
   /** R2 minter — production passes the real SDK call; tests pass a fake. */
   mintUploadUrl: RecordingsBaseDeps['mintUploadUrl'];
-  /** R2 public-URL composer — consumed by the Viewer route per ADR-0015. */
-  publicUrl: (key: string) => string;
+  /** Mints a short-lived signed-GET URL for viewing a stored object. */
+  mintViewUrl: (args: { key: string; ttlSeconds: number }) => Promise<string>;
+  /** How long a signed viewer URL is valid for, in seconds. */
+  viewUrlTtlSeconds: number;
   /** R2 object deleter — production passes the real SDK call; tests pass a fake. */
   deleteObject: (key: string) => Promise<void>;
   /** Hard limit on Upload sizes accepted by `/create-upload`. */
@@ -70,7 +72,8 @@ export function compose(leaves: ComposeLeaves): { app: Express; recordings: Reco
     renderViewerPage,
     renderLibraryPage,
     deleteObject: leaves.deleteObject,
-    publicUrl: leaves.publicUrl,
+    mintViewUrl: leaves.mintViewUrl,
+    viewUrlTtlSeconds: leaves.viewUrlTtlSeconds,
     publicDir: leaves.publicDir,
     publicAppUrl: leaves.publicAppUrl,
     signinTokenTtlSeconds: leaves.signinTokenTtlSeconds,

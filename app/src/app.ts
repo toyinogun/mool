@@ -43,8 +43,10 @@ export interface AppDeps {
   renderLibraryPage: (inputs: { recordingsJson: string }) => string;
   /** Deletes an R2 object by key. */
   deleteObject: (key: string) => Promise<void>;
-  /** Builds the public URL where R2 serves a stored object's bytes. See ADR-0015. */
-  publicUrl: (key: string) => string;
+  /** Mints a short-lived signed-GET URL for viewing a stored object. */
+  mintViewUrl: (args: { key: string; ttlSeconds: number }) => Promise<string>;
+  /** How long a signed viewer URL is valid for, in seconds. */
+  viewUrlTtlSeconds: number;
   /** Absolute path to the static-assets directory, or null in tests. */
   publicDir: string | null;
   /** Mool's public-facing app URL, e.g. `https://record.example.com`. */
@@ -73,7 +75,8 @@ export function createApp(deps: AppDeps): Express {
   app.get(VIEWER_ROUTE, asyncRoute(viewerRoute({
     recordings: deps.recordings,
     renderViewerPage: deps.renderViewerPage,
-    publicUrl: deps.publicUrl,
+    mintViewUrl: deps.mintViewUrl,
+    viewUrlTtlSeconds: deps.viewUrlTtlSeconds,
   })));
   app.post(
     '/create-upload',

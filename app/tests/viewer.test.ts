@@ -9,10 +9,9 @@ import type { Recordings } from '../src/recording';
 const TEST_USER_ID = 'test-user-id';
 
 describe('GET /v/:slug', () => {
-  it('composes the playback URL from publicUrl(r2Key) and embeds it in the HTML', async () => {
-    // The route projects Recording → { playbackUrl } per ADR-0015. This is the
-    // canonical pin for that projection: previously the composition lived in
-    // the Recording module's `get` and was tested in tests/recording.test.ts.
+  it('mints a signed-GET URL and embeds it in the HTML', async () => {
+    // The route projects Recording → { playbackUrl } via mintViewUrl.
+    // Default fake mints: https://fake-r2.test/<key>?signed=get&ttl=<ttl>
     const { app, recordings, cleanup } = buildTestApp({
       generateSlug: () => 'abc123',
     });
@@ -21,28 +20,61 @@ describe('GET /v/:slug', () => {
       const res = await request(app).get('/v/abc123');
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toContain('text/html');
-      expect(res.text).toContain('https://videos.example.com/abc123.webm');
+      expect(res.text).toContain('https://fake-r2.test/abc123.webm?signed=get&ttl=3600');
     } finally {
       cleanup();
     }
   });
 
-  it('passes the recording r2Key to publicUrl (not the slug)', async () => {
-    // Pins the projection's input: the route hands `r2Key` to `publicUrl`,
+  it('passes the recording r2Key to mintViewUrl (not the slug)', async () => {
+    // Pins the projection's input: the route hands `r2Key` to `mintViewUrl`,
     // not `slug`. v0.5 will diverge these (key format changes per ADR-0002),
     // and conflating them here would silently break.
     const seenKeys: string[] = [];
     const { app, recordings, cleanup } = buildTestApp({
       generateSlug: () => 'abc123',
-      publicUrl: (key) => {
+      mintViewUrl: async ({ key, ttlSeconds }) => {
         seenKeys.push(key);
-        return `https://videos.example.com/${key}`;
+        return `https://fake-r2.test/${key}?signed=get&ttl=${ttlSeconds}`;
       },
     });
     try {
       await recordings.create({ contentType: 'video/webm', sizeBytes: 1, userId: TEST_USER_ID });
       await request(app).get('/v/abc123');
       expect(seenKeys).toEqual(['abc123.webm']);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('uses the configured viewUrlTtlSeconds when minting the view URL', async () => {
+    const { app, recordings, cleanup } = buildTestApp({
+      generateSlug: () => 'abc123',
+      viewUrlTtlSeconds: 60,
+    });
+    try {
+      await recordings.create({ contentType: 'video/webm', sizeBytes: 1, userId: TEST_USER_ID });
+      const res = await request(app).get('/v/abc123');
+      expect(res.status).toBe(200);
+      expect(res.text).toContain('ttl=60');
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('returns 502 plain-text when mintViewUrl rejects', async () => {
+    const { app, recordings, cleanup } = buildTestApp({
+      generateSlug: () => 'abc123',
+      mintViewUrl: async () => {
+        throw new Error('R2 signing exploded');
+      },
+    });
+    try {
+      await recordings.create({ contentType: 'video/webm', sizeBytes: 1, userId: TEST_USER_ID });
+      const res = await request(app).get('/v/abc123');
+      expect(res.status).toBe(502);
+      expect(res.headers['content-type']).toContain('text/plain');
+      expect(res.text).toBe('Recording temporarily unavailable');
     } finally {
       cleanup();
     }
@@ -98,9 +130,10 @@ describe('GET /v/:slug', () => {
       deleteObject: async () => {
         throw new Error('deleteObject should not be called in this test');
       },
-      publicUrl: () => {
-        throw new Error('publicUrl should not be called when recordings.get throws');
+      mintViewUrl: async () => {
+        throw new Error('mintViewUrl should not be called when recordings.get throws');
       },
+      viewUrlTtlSeconds: 3600,
       publicDir: null,
       publicAppUrl: 'https://record.example.com',
       signinTokenTtlSeconds: 900,
