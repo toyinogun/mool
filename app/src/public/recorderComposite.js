@@ -188,6 +188,15 @@ export function composeStreams({ screenStream, cameraStream }) {
     for (const t of compositeStream.getVideoTracks()) {
       try { t.stop(); } catch { /* idempotent */ }
     }
+    // Stop the underlying getDisplayMedia screen track so Chrome's
+    // "is sharing your screen" banner clears immediately instead of
+    // lingering until GC reclaims the orphaned reference held via
+    // screenVideo.srcObject. The camera track is owned by recorder.js
+    // (still needed for the in-page preview after recording ends), so
+    // we intentionally do NOT stop cameraStream's tracks here.
+    for (const t of screenStream.getTracks()) {
+      try { t.stop(); } catch { /* idempotent */ }
+    }
     // Release the off-screen video elements' refs so the GC can reclaim them
     // and the underlying source-stream readers wind down.
     screenVideo.srcObject = null;
