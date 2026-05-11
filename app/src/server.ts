@@ -56,7 +56,7 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
     libraryTemplate: readFileSync(path.join(viewsDir, 'library.html'), 'utf8'),
     publicAppUrl: config.publicAppUrl,
     mintUploadUrl: r2.mintUploadUrl,
-    mintViewUrl: (args) => r2.mintViewUrl(args),
+    mintViewUrl: r2.mintViewUrl,
     viewUrlTtlSeconds: config.viewUrlTtlSeconds,
     deleteObject: (key) => r2.deleteObject(key),
     maxUploadBytes: config.maxUploadBytes,

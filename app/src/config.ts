@@ -3,6 +3,7 @@ export interface R2Config {
   secretAccessKey: string;
   bucket: string;
   endpoint: string;
+  /** @deprecated v0.4: no longer consumed; remove in v0.5 once private-bucket migration is confirmed. */
   publicBaseUrl: string;
 }
 
