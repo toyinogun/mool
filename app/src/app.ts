@@ -105,6 +105,11 @@ export function createApp(deps: AppDeps): Express {
     cookieSecure: deps.cookieSecure,
   })));
 
+  app.get('/signin', (_req, res, next) => {
+    if (!deps.publicDir) return next();
+    res.sendFile('signin.html', { root: deps.publicDir });
+  });
+
   // Gated recorder page — must come before express.static so unauthenticated
   // requests to / are redirected instead of falling through to static.
   app.get('/', requireSessionHtml, (_req, res, next) => {
