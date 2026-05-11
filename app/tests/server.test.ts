@@ -88,8 +88,9 @@ describe('bootServer', () => {
     cleanups.push(() => recordings.close());
 
     const res = await request(app).get('/healthz');
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
+    // skipDb=true → no dbHandle → dbHealth returns false → 503
+    expect(res.status).toBe(503);
+    expect(res.body).toEqual({ ok: false });
   });
 
   it('creates the data directory if it does not exist', async () => {

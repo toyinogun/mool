@@ -57,6 +57,8 @@ export interface AppDeps {
   sessionTtlSeconds: number;
   /** Whether to set the Secure flag on the session cookie. */
   cookieSecure: boolean;
+  /** Checks DB liveness — returns true if healthy, false/throws if not. */
+  dbHealth: () => Promise<boolean>;
 }
 
 export function createApp(deps: AppDeps): Express {
@@ -68,8 +70,13 @@ export function createApp(deps: AppDeps): Express {
   const requireSessionHtml = requireSession({ authStore: deps.authStore, mode: 'html', signinUrl });
   const requireSessionJson = requireSession({ authStore: deps.authStore, mode: 'json', signinUrl: '' });
 
-  app.get('/healthz', (_req, res) => {
-    res.json({ ok: true });
+  app.get('/healthz', async (_req, res) => {
+    try {
+      const ok = await deps.dbHealth();
+      res.status(ok ? 200 : 503).json({ ok });
+    } catch {
+      res.status(503).json({ ok: false });
+    }
   });
 
   app.get(VIEWER_ROUTE, asyncRoute(viewerRoute({

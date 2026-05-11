@@ -8,6 +8,8 @@ import { createDb, runMigrations, type DbHandle } from './db/client';
 import { createPostgresAuthStore, createInMemoryAuthStore, type AuthStore } from './auth/authStore';
 import { createResendSender } from './email/sender';
 import type { Recordings } from './recording';
+import { startCleanupLoop, type CleanupLoop } from './cleanup';
+import { sql } from 'drizzle-orm';
 
 export interface BootServerOpts {
   config: AppConfig;
@@ -32,6 +34,7 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
   app: Express;
   recordings: Recordings;
   dbHandle: DbHandle | null;
+  cleanup: CleanupLoop | null;
 }> {
   mkdirSync(config.dataDir, { recursive: true });
   let dbHandle: DbHandle | null = null;
@@ -50,6 +53,11 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
     }
     authStore = createInMemoryAuthStore();
   }
+  const dbHealth = async (): Promise<boolean> => {
+    if (!dbHandle) return false;
+    await dbHandle.db.execute(sql`SELECT 1`);
+    return true;
+  };
   const { app, recordings } = compose({
     db: dbHandle?.db ?? null,
     template: readFileSync(path.join(viewsDir, 'viewer.html'), 'utf8'),
@@ -66,8 +74,10 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
     signinTokenTtlSeconds: config.signinTokenTtlSeconds,
     sessionTtlSeconds: config.sessionTtlSeconds,
     cookieSecure: config.cookieSecure,
+    dbHealth,
   });
-  return { app, recordings, dbHandle };
+  const cleanup = skipDb ? null : startCleanupLoop({ authStore });
+  return { app, recordings, dbHandle, cleanup };
 }
 
 if (require.main === module) {

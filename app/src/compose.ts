@@ -55,6 +55,8 @@ export interface ComposeLeaves {
   sessionTtlSeconds: number;
   /** Whether to set the Secure flag on the session cookie. */
   cookieSecure: boolean;
+  /** Checks DB liveness — returns true if healthy, false/throws if not. */
+  dbHealth: () => Promise<boolean>;
 }
 
 export function compose(leaves: ComposeLeaves): { app: Express; recordings: Recordings } {
@@ -79,6 +81,7 @@ export function compose(leaves: ComposeLeaves): { app: Express; recordings: Reco
     signinTokenTtlSeconds: leaves.signinTokenTtlSeconds,
     sessionTtlSeconds: leaves.sessionTtlSeconds,
     cookieSecure: leaves.cookieSecure,
+    dbHealth: leaves.dbHealth,
   });
   return { app, recordings };
 }

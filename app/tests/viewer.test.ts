@@ -139,6 +139,7 @@ describe('GET /v/:slug', () => {
       signinTokenTtlSeconds: 900,
       sessionTtlSeconds: 2592000,
       cookieSecure: false,
+      dbHealth: async () => true,
     });
     const res = await request(app).get('/v/abc123');
     expect(res.status).toBe(500);

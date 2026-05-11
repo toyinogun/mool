@@ -49,6 +49,8 @@ export interface BuildTestAppOpts {
   sessionTtlSeconds?: number;
   /** Override the Secure cookie flag — defaults to false (tests run over HTTP). */
   cookieSecure?: boolean;
+  /** Override the DB health check — defaults to async () => true (always healthy in tests). */
+  dbHealth?: () => Promise<boolean>;
 }
 
 export function buildTestApp(opts: BuildTestAppOpts = {}): {
@@ -78,6 +80,7 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
     signinTokenTtlSeconds: opts.signinTokenTtlSeconds ?? 900,
     sessionTtlSeconds: opts.sessionTtlSeconds ?? 2592000,
     cookieSecure: opts.cookieSecure ?? false,
+    dbHealth: opts.dbHealth ?? (async () => true),
   });
   return { app, recordings, authStore, emailSender, cleanup: () => recordings.close() };
 }
