@@ -83,7 +83,6 @@ export function openFloatingCam({
       win = await dpip.requestWindow({
         width,
         height,
-        copyStyleSheets: true,
       });
     } catch (err) {
       if (!closeRequested) {
@@ -109,19 +108,50 @@ export function openFloatingCam({
   function populate(win) {
     const doc = win.document;
 
-    // Tight layout. Dark background so the brief gap before <video>'s first
+    // Self-contained styles. copyStyleSheets is unreliable for linked external
+    // stylesheets in current Chrome (the spec rated this Low; field testing
+    // promoted it to Likely), so inline what the bubble needs rather than
+    // depend on /styles.css carrying over. Colour values mirror the CSS
+    // variables in styles.css; the PIP document has no :root definitions of
+    // its own. Dark background so the brief gap before <video>'s first
     // painted frame reads as "loading" rather than "broken".
-    doc.body.style.margin = '0';
-    doc.body.style.display = 'flex';
-    doc.body.style.flexDirection = 'column';
-    doc.body.style.alignItems = 'center';
-    doc.body.style.justifyContent = 'center';
-    doc.body.style.gap = '12px';
-    doc.body.style.padding = '12px';
-    doc.body.style.background = '#111';
+    const style = doc.createElement('style');
+    style.textContent = `
+      body {
+        margin: 0;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: #0e1116;
+        color: #e6edf3;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .cam-preview {
+        width: 200px;
+        height: 200px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: #000;
+        border: 2px solid #30363d;
+        transform: scaleX(-1);
+      }
+      button.primary {
+        padding: 0.5rem 1.25rem;
+        font-size: 0.95rem;
+        border-radius: 6px;
+        border: 1px solid #2da44e;
+        background: #2da44e;
+        color: #e6edf3;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      button.primary:hover { background: #2c974b; }
+    `;
+    doc.head.appendChild(style);
 
-    // <video>: reuses the .cam-preview rule (circle + mirror) carried over
-    // by copyStyleSheets.
     video = doc.createElement('video');
     video.className = 'cam-preview';
     video.autoplay = true;
