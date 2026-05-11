@@ -40,6 +40,21 @@ export function isFloatingCamSupported() {
 }
 
 /**
+ * MM:SS format, two-digit padded, no hour rollover. Duplicated from
+ * recorder.js (see spec §4): pulling it across the module boundary would
+ * require either exporting a recorder-page helper or moving it to a shared
+ * module — larger refactors than four lines of trivial logic justify.
+ *
+ * @param {number} ms
+ */
+function formatElapsed(ms) {
+  const s = Math.floor(ms / 1000);
+  const mm = String(Math.floor(s / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
+/**
  * Open the floating-camera overlay. Returns an opaque handle synchronously;
  * the bubble appears asynchronously. Throws synchronously only if the API
  * is missing — guard with `isFloatingCamSupported()` to avoid this path.
@@ -67,7 +82,7 @@ export function openFloatingCam({
   onClosed,
   onError,
   width = 240,
-  height = 280,
+  height = 320,
 }) {
   /** @type {any} */
   const dpip = /** @type {any} */ (window).documentPictureInPicture;
@@ -80,6 +95,8 @@ export function openFloatingCam({
   let pipWindow = null;
   /** @type {HTMLVideoElement | null} */
   let video = null;
+  /** @type {ReturnType<typeof setInterval> | null} */
+  let timerInterval = null;
 
   // Async open. The handle returned below is live the moment this returns,
   // but `close()` and `pipWindow` are coordinated by the closeRequested flag
@@ -146,6 +163,14 @@ export function openFloatingCam({
         border: 2px solid #30363d;
         transform: scaleX(-1);
       }
+      .cam-timer {
+        font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+        font-size: 18px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.04em;
+        color: #e6edf3;
+      }
       button.primary {
         padding: 0.5rem 1.25rem;
         font-size: 0.95rem;
@@ -171,6 +196,17 @@ export function openFloatingCam({
     });
     doc.body.appendChild(video);
 
+    // Live recording timer. 1Hz interval inside the PiP window itself, so the
+    // PiP owns its own ticking and the recorder.js module doesn't reach in.
+    const timerEl = doc.createElement('div');
+    timerEl.className = 'cam-timer';
+    timerEl.textContent = formatElapsed(Date.now() - startedAt);
+    doc.body.appendChild(timerEl);
+
+    timerInterval = win.setInterval(() => {
+      timerEl.textContent = formatElapsed(Date.now() - startedAt);
+    }, 1000);
+
     // Stop button.
     const stopBtn = doc.createElement('button');
     stopBtn.type = 'button';
@@ -189,6 +225,10 @@ export function openFloatingCam({
     // pagehide caused by our own close() does NOT fire onClosed.
     let closedFired = false;
     win.addEventListener('pagehide', () => {
+      if (timerInterval !== null) {
+        try { win.clearInterval(timerInterval); } catch { /* doc may be torn down */ }
+        timerInterval = null;
+      }
       if (closeRequested) return;
       if (closedFired) return;
       closedFired = true;
@@ -201,6 +241,10 @@ export function openFloatingCam({
   function close() {
     if (closeRequested) return;
     closeRequested = true;
+    if (timerInterval !== null && pipWindow) {
+      try { pipWindow.clearInterval(timerInterval); } catch { /* doc may be torn down */ }
+      timerInterval = null;
+    }
     if (pipWindow) {
       try { if (video) video.srcObject = null; } catch { /* doc may be torn down */ }
       try { pipWindow.close(); } catch { /* idempotent */ }
