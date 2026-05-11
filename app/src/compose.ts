@@ -19,6 +19,7 @@ import { createUrls } from './urls';
 import { createViewerPage } from './viewerPage';
 import type { Db } from './db/client';
 import type { AuthStore } from './auth/authStore';
+import type { EmailSender } from './email/sender';
 
 export interface ComposeLeaves {
   /** Path to the SQLite file; use ':memory:' for tests. Removed in Task 12. */
@@ -41,6 +42,8 @@ export interface ComposeLeaves {
   generateSlug?: () => string;
   /** Auth store — production passes the Postgres impl; tests pass the in-memory impl. */
   authStore: AuthStore;
+  /** Email sender — production passes the Resend impl; tests pass the fake. */
+  emailSender: EmailSender;
 }
 
 export function compose(leaves: ComposeLeaves): { app: Express; recordings: Recordings } {
@@ -55,6 +58,7 @@ export function compose(leaves: ComposeLeaves): { app: Express; recordings: Reco
   const app = createApp({
     recordings,
     authStore: leaves.authStore,
+    emailSender: leaves.emailSender,
     maxUploadBytes: leaves.maxUploadBytes,
     renderViewerPage,
     publicUrl: leaves.publicUrl,

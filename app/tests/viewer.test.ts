@@ -3,6 +3,7 @@ import request from 'supertest';
 import { buildTestApp } from './helpers/testApp';
 import { createApp } from '../src/app';
 import { createInMemoryAuthStore } from '../src/auth/authStore';
+import { createFakeEmailSender } from '../src/email/sender';
 import type { Recordings } from '../src/recording';
 
 describe('GET /v/:slug', () => {
@@ -78,6 +79,7 @@ describe('GET /v/:slug', () => {
     const app = createApp({
       recordings: failingRecordings,
       authStore: createInMemoryAuthStore(),
+      emailSender: createFakeEmailSender(),
       maxUploadBytes: 1024,
       renderViewerPage: () => {
         throw new Error('renderViewerPage should not be called when recordings.get throws');

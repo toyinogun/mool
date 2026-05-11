@@ -6,6 +6,7 @@ import { createR2 } from './r2';
 import { compose } from './compose';
 import { createDb, runMigrations, type DbHandle } from './db/client';
 import { createPostgresAuthStore, createInMemoryAuthStore, type AuthStore } from './auth/authStore';
+import { createResendSender } from './email/sender';
 import type { Recordings } from './recording';
 
 export interface BootServerOpts {
@@ -39,6 +40,7 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
     await runMigrations(dbHandle.db, path.join(__dirname, '..', 'db', 'migrations'));
   }
   const r2 = createR2(config.r2);
+  const emailSender = createResendSender({ apiKey: config.resend.apiKey, from: config.resend.from });
   let authStore: AuthStore;
   if (dbHandle) {
     authStore = createPostgresAuthStore({ db: dbHandle.db });
@@ -58,6 +60,7 @@ export async function bootServer({ config, viewsDir, publicDir, skipDb }: BootSe
     maxUploadBytes: config.maxUploadBytes,
     publicDir,
     authStore,
+    emailSender,
   });
   return { app, recordings, dbHandle };
 }

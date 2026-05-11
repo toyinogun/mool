@@ -2,6 +2,7 @@ import { compose, type ComposeLeaves } from '../../src/compose';
 import type { Recordings, RecordingsDeps } from '../../src/recording';
 import { createInMemoryAuthStore } from '../../src/auth/authStore';
 import type { AuthStore } from '../../src/auth/authStore';
+import { createFakeEmailSender, type FakeEmailSender } from '../../src/email/sender';
 import type { Express } from 'express';
 
 export function fakeR2() {
@@ -28,15 +29,19 @@ export interface BuildTestAppOpts {
   generateSlug?: () => string;
   /** Override the auth store — defaults to a fresh in-memory impl. */
   authStore?: AuthStore;
+  /** Override the email sender — defaults to a fresh fake. */
+  emailSender?: FakeEmailSender;
 }
 
 export function buildTestApp(opts: BuildTestAppOpts = {}): {
   app: Express;
   recordings: Recordings;
+  emailSender: FakeEmailSender;
   cleanup: () => void;
 } {
   const defaults = fakeR2();
   const authStore = opts.authStore ?? createInMemoryAuthStore();
+  const emailSender = opts.emailSender ?? createFakeEmailSender();
   const { app, recordings } = compose({
     dbPath: ':memory:',
     db: null,
@@ -48,6 +53,7 @@ export function buildTestApp(opts: BuildTestAppOpts = {}): {
     publicDir: null,
     generateSlug: opts.generateSlug,
     authStore,
+    emailSender,
   });
-  return { app, recordings, cleanup: () => recordings.close() };
+  return { app, recordings, emailSender, cleanup: () => recordings.close() };
 }

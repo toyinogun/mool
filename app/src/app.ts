@@ -8,6 +8,7 @@ import express, {
 import cookieParser from 'cookie-parser';
 import type { Recordings } from './recording';
 import type { AuthStore } from './auth/authStore';
+import type { EmailSender } from './email/sender';
 import { createUploadRoute } from './routes/createUpload';
 import { viewerRoute } from './routes/viewer';
 import { VIEWER_ROUTE } from './urls';
@@ -27,6 +28,7 @@ export function asyncRoute(fn: AsyncHandler): RequestHandler {
 export interface AppDeps {
   recordings: Recordings;
   authStore: AuthStore;
+  emailSender: EmailSender;
   maxUploadBytes: number;
   renderViewerPage: (inputs: { playbackUrl: string }) => string;
   /** Builds the public URL where R2 serves a stored object's bytes. See ADR-0015. */
